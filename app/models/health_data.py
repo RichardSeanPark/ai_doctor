@@ -42,7 +42,8 @@ class HealthAssessment(BaseModel):
     concerns: List[str] = []
     recommendations: List[str] = []
     has_concerns: bool = False
-    summary: str
+    assessment_summary: str  # Renamed from summary
+    query_text: Optional[str] = None  # Added for tracking health queries
     
 class DietEntry(BaseModel):
     meal_id: str  # 식사 ID

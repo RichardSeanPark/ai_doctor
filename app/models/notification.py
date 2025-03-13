@@ -38,6 +38,7 @@ class UserState(BaseModel):
     notifications: List[AndroidNotification] = []
     current_notification: Optional[AndroidNotification] = None
     voice_input: Optional[str] = None
+    voice_data: Optional[Dict[str, Any]] = None
     voice_segments: List[VoiceSegment] = []
     recent_meals: Optional[Dict[str, Any]] = None
     progress_data: Optional[Dict[str, Any]] = None

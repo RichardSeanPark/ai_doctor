@@ -36,7 +36,7 @@ def parse_args():
     parser.add_argument(
         "--port", 
         type=int, 
-        default=int(os.environ.get("API_PORT", 8000)),
+        default=int(os.environ.get("API_PORT", 8080)),
         help="서버 포트 (기본값: 8000)"
     )
     parser.add_argument(

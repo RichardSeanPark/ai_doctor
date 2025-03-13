@@ -7,7 +7,7 @@ import json
 import uuid
 import logging
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, List, Union
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends, Request, Body, File, UploadFile, Form
@@ -19,6 +19,15 @@ from pydantic import BaseModel, Field
 from app.models.health_data import DietEntry, HealthMetrics, HealthAssessment
 from app.models.user_profile import UserProfile, UserGoal
 from app.main import HealthAIApplication
+from app.api import auth_routes, health_routes, voice_routes  # voice_routes 추가
+from app.models.api_models import ApiResponse  # ApiResponse를 직접 정의하지 않고 임포트
+from app.models.voice_models import VoiceQueryRequest, VoiceResponse, ConsultationRequest
+from app.models.health_data import HealthMetrics, HealthAssessment, DietEntry  # 실제 존재하는 클래스로 대체
+from app.models.user_data import UserCreate, UserLogin, UserProfile, UserResponse
+from app.models.notification import AndroidNotification  # NotificationSettings 대신 AndroidNotification 사용
+from app.config.settings import Settings
+from app.utils.conversation_manager import ConversationManager
+from app.utils.api_utils import handle_api_error  # api_utils에서 공통 함수 임포트
 
 # 로깅 설정
 logging.basicConfig(
@@ -40,23 +49,26 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# 인증 및 건강 라우터 연결
+app.include_router(auth_routes.router, prefix="/api/v1/auth")
+app.include_router(health_routes.router, prefix="/api/v1/health")
+app.include_router(voice_routes.router, prefix="/api/v1") # voice_routes 추가 (prefix는 /api/v1)
+
 # Health AI 애플리케이션 인스턴스
 health_ai_app = HealthAIApplication()
 
 # 사용자 세션 캐시 (실제 환경에서는 Redis 등의 외부 캐시 사용 권장)
+# TODO: 이 부분은 conversation_dao.py의 세션 관리 기능과 중복될 수 있음
+# 추후 리팩토링 시 다음과 같은 방향으로 개선 가능:
+# 1. ConversationDAO를 확장하여 임시 세션 정보도 저장하도록 수정
+# 2. 별도의 SessionManager 클래스를 만들어 세션 관리 통합
+# 3. Redis와 같은 외부 캐시 시스템 도입
 user_sessions: Dict[str, Dict[str, Any]] = {}
 
-# API 요청/응답 모델 정의
-class ApiResponse(BaseModel):
-    success: bool = True
-    message: str = ""
-    data: Optional[Dict[str, Any]] = None
+# 대화 관리자 초기화
+conversation_manager = ConversationManager()
 
-class VoiceQueryRequest(BaseModel):
-    user_id: str
-    query: str
-    session_id: Optional[str] = None
-
+# API 요청 모델 정의 (응답 모델은 공통 ApiResponse 사용)
 class DietAnalysisRequest(BaseModel):
     user_id: str
     meal_type: str = "breakfast"
@@ -79,7 +91,12 @@ class NotificationRequest(BaseModel):
 
 # 사용자 세션 관리 함수
 def get_user_session(user_id: str, create_if_missing: bool = True) -> Dict[str, Any]:
-    """사용자 세션 정보를 조회하거나 생성합니다."""
+    """
+    사용자 세션 정보를 조회하거나 생성합니다.
+    
+    참고: 이 함수는 메모리 내 세션을 관리합니다. 지속성이 필요한 경우 
+    conversation_dao.py의 대화 세션 관리 기능을 활용하세요.
+    """
     if user_id not in user_sessions and create_if_missing:
         user_sessions[user_id] = {
             "session_id": str(uuid.uuid4()),
@@ -121,76 +138,24 @@ async def create_or_update_user_profile(profile_data: Dict[str, Any] = Body(...)
         logger.error(f"프로필 업데이트 오류: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/api/v1/voice/query", response_model=ApiResponse)
-async def process_voice_query(request: VoiceQueryRequest):
-    """음성 쿼리 처리"""
-    try:
-        user_id = request.user_id
-        query = request.query
-        session_id = request.session_id or get_user_session(user_id)["session_id"]
-        
-        logger.info(f"음성 쿼리 처리: {user_id}, 쿼리: {query}")
-        
-        # Health AI 애플리케이션을 통한 음성 쿼리 처리
-        result = await health_ai_app.process_voice_query(query, user_id=user_id)
-        
-        if not result:
-            return ApiResponse(
-                success=True,
-                message="음성 쿼리가 처리되었지만 응답이 생성되지 않았습니다",
-                data={"default_response": "질문을 이해하지 못했습니다. 다시 말씀해 주세요."}
-            )
-        
-        # 응답 생성 (result는 List[str]임)
-        voice_response = {
-            "session_id": session_id,
-            "response_text": result[0] if result else "",
-            "voice_segments": [],
-            "voice_scripts": result
-        }
-        
-        return ApiResponse(
-            success=True,
-            message="음성 쿼리가 처리되었습니다",
-            data=voice_response
-        )
-    except Exception as e:
-        logger.error(f"음성 쿼리 처리 오류: {str(e)}")
-        return ApiResponse(
-            success=False,
-            message=f"음성 쿼리 처리 중 오류가 발생했습니다: {str(e)}",
-            data={"error": str(e)}
-        )
-
 @app.post("/api/v1/diet/analyze", response_model=ApiResponse)
 async def analyze_diet(request: DietAnalysisRequest):
     """식단 분석"""
-    try:
-        user_id = request.user_id
-        meal_type = request.meal_type
-        meal_items = request.meal_items
-        
-        logger.info(f"식단 분석: {user_id}, 식사 유형: {meal_type}")
+    async def _analyze_diet():
+        logger.info(f"식단 분석: {request.user_id}, 식사 유형: {request.meal_type}")
         
         # Health AI 애플리케이션을 통한 식단 분석
-        result = await health_ai_app.analyze_diet(
-            user_id=user_id,
-            meal_type=meal_type,
-            meal_items=meal_items
+        return await health_ai_app.analyze_diet(
+            user_id=request.user_id,
+            meal_type=request.meal_type,
+            meal_items=request.meal_items
         )
-        
-        return ApiResponse(
-            success=True,
-            message="식단 분석이 완료되었습니다",
-            data=result
-        )
-    except Exception as e:
-        logger.error(f"식단 분석 오류: {str(e)}")
-        return ApiResponse(
-            success=False,
-            message=f"식단 분석 중 오류가 발생했습니다: {str(e)}",
-            data={"error": str(e)}
-        )
+    
+    return await handle_api_error(
+        _analyze_diet,
+        f"사용자 {request.user_id}의 식단 분석",
+        "식단 분석이 완료되었습니다"
+    )
 
 @app.post("/api/v1/food/analyze-image", response_model=ApiResponse)
 async def analyze_food_image(
@@ -262,37 +227,6 @@ async def health_check(request: HealthCheckRequest):
         return ApiResponse(
             success=False,
             message=f"건강 상태 확인 중 오류가 발생했습니다: {str(e)}",
-            data={"error": str(e)}
-        )
-
-@app.post("/api/v1/consultation/voice", response_model=ApiResponse)
-async def start_voice_consultation(request: Dict[str, Any] = Body(...)):
-    """음성 상담 세션 시작"""
-    try:
-        user_id = request.get("user_id")
-        consultation_data = request.get("consultation_data", {})
-        
-        if not user_id:
-            raise HTTPException(status_code=400, detail="사용자 ID가 누락되었습니다")
-        
-        logger.info(f"음성 상담 시작: {user_id}")
-        
-        # Health AI 애플리케이션을 통한 음성 상담 수행
-        result = await health_ai_app.conduct_health_consultation(
-            user_id=user_id,
-            consultation_data=consultation_data
-        )
-        
-        return ApiResponse(
-            success=True,
-            message="음성 상담 세션이 시작되었습니다",
-            data=result
-        )
-    except Exception as e:
-        logger.error(f"음성 상담 시작 오류: {str(e)}")
-        return ApiResponse(
-            success=False,
-            message=f"음성 상담 세션 시작 중 오류가 발생했습니다: {str(e)}",
             data={"error": str(e)}
         )
 
