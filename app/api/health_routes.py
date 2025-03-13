@@ -104,7 +104,36 @@ async def add_health_metrics(metrics: HealthMetricsRequest, user=Depends(get_cur
     async def _add_health_metrics():
         metrics_dict = metrics.dict()
         metrics_id = health_dao.add_health_metrics(user["user_id"], metrics_dict)
-        return {"metrics_id": metrics_id}
+        
+        # 키와 체중이 있는 경우 BMI 계산 결과를 응답에 포함
+        response_data = {"metrics_id": metrics_id}
+        weight = metrics_dict.get('weight')
+        height = metrics_dict.get('height')
+        
+        if weight is not None and height is not None and height > 0:
+            height_m = height / 100.0
+            bmi = round(weight / (height_m * height_m), 1)
+            response_data["bmi"] = bmi
+            response_data["bmi_calculated"] = True
+            
+            # BMI 카테고리 추가
+            bmi_category = "정보 없음"
+            if bmi < 18.5:
+                bmi_category = "저체중"
+            elif bmi < 23.0:
+                bmi_category = "정상"
+            elif bmi < 25.0:
+                bmi_category = "과체중"
+            elif bmi < 30.0:
+                bmi_category = "비만(1단계)"
+            elif bmi < 35.0:
+                bmi_category = "비만(2단계)"
+            else:
+                bmi_category = "심각한 비만"
+                
+            response_data["bmi_category"] = bmi_category
+        
+        return response_data
     
     return await handle_api_error(
         _add_health_metrics,

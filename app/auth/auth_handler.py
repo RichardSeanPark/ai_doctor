@@ -7,7 +7,7 @@ JWT 토큰 생성, 검증 및 사용자 인증을 처리합니다.
 import jwt
 import time
 from datetime import datetime, timedelta
-from typing import Dict, Optional
+from typing import Dict, Optional, Any
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel
@@ -76,7 +76,7 @@ def decode_token(token: str) -> Dict:
             headers={"WWW-Authenticate": "Bearer"}
         )
 
-async def get_current_user(token: str = Depends(oauth2_scheme)) -> UserInfo:
+async def get_current_user(token: str = Depends(oauth2_scheme)) -> Dict[str, Any]:
     """
     현재 인증된 사용자 정보 조회
     
@@ -86,16 +86,16 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> UserInfo:
         # 토큰 디코딩
         payload = decode_token(token)
         
-        # UserInfo 객체 생성
-        user_info = UserInfo(
-            user_id=payload["sub"],
-            username=payload["username"],
-            role=payload.get("role", "user")
-        )
+        # 사용자 정보를 사전 형태로 반환
+        user_info = {
+            "user_id": payload["sub"],
+            "username": payload["username"],
+            "role": payload.get("role", "user")
+        }
         
         # 이메일 추가 (선택)
         if "email" in payload:
-            user_info.email = payload["email"]
+            user_info["email"] = payload["email"]
         
         return user_info
     except Exception:

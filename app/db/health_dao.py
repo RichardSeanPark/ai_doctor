@@ -30,15 +30,24 @@ class HealthDAO:
         sleep_hours = metrics.get('sleep_hours')
         steps = metrics.get('steps')
         
+        # BMI 자동 계산 (키와 체중이 모두 제공된 경우)
+        bmi = None
+        if weight is not None and height is not None and height > 0:
+            # 키(cm)를 미터로 변환하여 BMI 계산
+            height_m = height / 100.0
+            bmi = round(weight / (height_m * height_m), 1)
+            logger.info(f"BMI 자동 계산: {bmi} (체중: {weight}kg, 키: {height}cm)")
+        
+        # BMI 필드 추가
         query = """
             INSERT INTO health_metrics (
                 metrics_id, user_id, timestamp,
                 weight, height, heart_rate,
                 blood_pressure_systolic, blood_pressure_diastolic,
                 blood_sugar, temperature, oxygen_saturation,
-                sleep_hours, steps
+                sleep_hours, steps, bmi
             ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
             )
         """
         
@@ -47,7 +56,7 @@ class HealthDAO:
             weight, height, heart_rate,
             blood_pressure_systolic, blood_pressure_diastolic,
             blood_sugar, temperature, oxygen_saturation,
-            sleep_hours, steps
+            sleep_hours, steps, bmi
         )
         
         try:

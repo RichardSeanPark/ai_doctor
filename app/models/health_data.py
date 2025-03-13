@@ -22,6 +22,8 @@ class HealthMetrics(BaseModel):
     weight: Optional[float] = None
     sleep_hours: Optional[float] = None
     steps: Optional[int] = None
+    height: Optional[float] = None  # 키(cm)
+    bmi: Optional[float] = None  # BMI (서버에서 자동 계산)
     
     class Config:
         arbitrary_types_allowed = True
