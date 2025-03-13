@@ -60,8 +60,13 @@ class UserDAO:
         query = "SELECT * FROM users WHERE username = %s"
         return self.db.fetch_one(query, (username,))
     
-    def authenticate_user(self, username: str, password: str) -> Optional[str]:
-        """사용자 인증 및 ID 반환"""
+    def get_user_by_email(self, email: str) -> Optional[Dict]:
+        """이메일로 사용자 정보 조회"""
+        query = "SELECT * FROM users WHERE email = %s"
+        return self.db.fetch_one(query, (email,))
+    
+    def authenticate_user(self, username: str, password: str) -> Optional[Dict[str, Any]]:
+        """사용자 인증 및 사용자 정보 반환"""
         user = self.get_user_by_username(username)
         
         if not user:
@@ -84,7 +89,7 @@ class UserDAO:
         # 해시 비교
         if input_hash == password_hash:
             logger.info(f"사용자 인증 성공: {username}")
-            return user['user_id']
+            return user  # 전체 사용자 정보 반환
         else:
             logger.warning(f"인증 실패: 비밀번호 불일치 - {username}")
             return None

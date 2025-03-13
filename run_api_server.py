@@ -49,6 +49,11 @@ def parse_args():
         action="store_true",
         help="디버그 모드 활성화"
     )
+    parser.add_argument(
+        "--skip-db-init", 
+        action="store_true",
+        help="데이터베이스 초기화 건너뛰기"
+    )
     
     return parser.parse_args()
 
@@ -60,6 +65,16 @@ def main():
     if args.debug:
         logging.getLogger().setLevel(logging.DEBUG)
         logger.debug("디버그 모드가 활성화되었습니다.")
+    
+    # 데이터베이스 초기화
+    if not args.skip_db_init:
+        logger.info("데이터베이스 초기화 중...")
+        from app.db.init_db import init_database
+        if init_database():
+            logger.info("데이터베이스 초기화 완료")
+        else:
+            logger.error("데이터베이스 초기화 실패")
+            sys.exit(1)
     
     # 서버 시작 로그
     logger.info(f"Health AI API 서버를 {args.host}:{args.port}에서 시작합니다...")
