@@ -7,7 +7,6 @@ import logfire
 import logging
 import base64
 import uuid
-import json
 
 from app.models.user_profile import UserProfile, UserGoal, HealthMetrics
 from app.models.health_data import SymptomReport, HealthAssessment, DietEntry
@@ -19,9 +18,7 @@ from app.graphs.health_check_graph import create_health_metrics_graph, create_sy
 from app.graphs.voice_consultation_graph import create_voice_query_graph, create_voice_consultation_graph
 from app.graphs.notification_graph import create_notification_graph, create_motivational_notification_graph
 
-from langgraph.graph import END, StateGraph
-from app.nodes.health_check_nodes import analyze_health_metrics
-from app.config.settings import Settings
+from langgraph.graph import END
 
 # 환경 변수 로드
 load_dotenv()
@@ -204,18 +201,8 @@ class HealthAIApplication:
         
         return result
     
-    async def process_voice_query(self, query_text: str, user_id: str = None, context: Dict[str, Any] = None) -> List[str]:
-        """
-        음성 질의 처리
-        
-        Args:
-            query_text: 처리할 질의 텍스트
-            user_id: 사용자 ID (없으면 현재 사용자 ID 사용)
-            context: 대화 컨텍스트 정보 (없으면 사용 안함)
-        
-        Returns:
-            음성 응답 텍스트 목록
-        """
+    async def process_voice_query(self, query_text: str, user_id: str = None) -> List[str]:
+        """음성 질의 처리"""
         self.logger.info(f"음성 질의 처리 시작: {query_text}")
         
         # 빈 쿼리 처리
@@ -234,11 +221,6 @@ class HealthAIApplication:
         })
         self.logger.info("사용자 상태 객체 생성 완료")
         
-        # 대화 컨텍스트가 있으면 상태에 추가
-        if context:
-            state.conversation_context = context
-            self.logger.info(f"대화 컨텍스트 정보 추가됨: {len(context)} 항목")
-        
         # 그래프 실행
         try:
             self.logger.info(f"음성 질의 그래프 실행 시작 - 쿼리: '{query_text}'")
@@ -250,10 +232,7 @@ class HealthAIApplication:
             except Exception as e:
                 # voice_data 설정 실패 시 config로 전달
                 self.logger.warning(f"상태에 voice_data 설정 실패: {str(e)}")
-                config = {
-                    "voice_data": {"text": query_text},
-                    "conversation_context": context
-                }
+                config = {"voice_data": {"text": query_text}}
                 self.logger.info(f"대신 config로 전달: {config}")
                 result = await self.voice_query_graph.ainvoke(state, config)
                 self.logger.info(f"음성 질의 처리 완료 (config 사용) - 결과 타입: {type(result)}")
@@ -285,9 +264,8 @@ class HealthAIApplication:
                 self.logger.warning(f"알 수 없는 결과 타입: {type(result)}")
                 return ["죄송합니다. 응답을 처리하는 중에 오류가 발생했습니다. 다시 시도해주세요."]
                 
-            # 직접 그래프 실행 (대화 컨텍스트 포함)
-            config = {"conversation_context": context} if context else {}
-            result = await self.voice_query_graph.ainvoke(state, config)
+            # 직접 그래프 실행
+            result = await self.voice_query_graph.ainvoke(state)
             self.logger.info(f"음성 질의 처리 완료 - 결과 타입: {type(result)}")
             
             # 결과 형식에 따른 처리
@@ -307,18 +285,8 @@ class HealthAIApplication:
             self.logger.error(traceback.format_exc())
             return [f"죄송합니다. 음성 질의 처리 중 오류가 발생했습니다: {str(e)}"]
             
-    async def process_health_query(self, query_text: str, user_id: str = None, context: Dict[str, Any] = None) -> List[str]:
-        """
-        건강 상담 쿼리 처리
-        
-        Args:
-            query_text: 처리할 질의 텍스트
-            user_id: 사용자 ID (없으면 현재 사용자 ID 사용)
-            context: 대화 컨텍스트 정보 (없으면 사용 안함)
-        
-        Returns:
-            건강 상담 응답 텍스트 목록
-        """
+    async def process_health_query(self, query_text: str, user_id: str = None) -> List[str]:
+        """건강 상담 쿼리 처리"""
         self.logger.info(f"건강 상담 쿼리 처리 시작: {query_text}")
         
         # 빈 쿼리 처리
@@ -338,11 +306,6 @@ class HealthAIApplication:
         })
         self.logger.info("건강 상담용 사용자 상태 객체 생성 완료")
         
-        # 대화 컨텍스트가 있으면 상태에 추가
-        if context:
-            state.conversation_context = context
-            self.logger.info(f"건강 상담 대화 컨텍스트 정보 추가됨: {len(context)} 항목")
-        
         # 그래프 실행
         try:
             self.logger.info(f"건강 상담 그래프(health_metrics_graph) 실행 시작 - 쿼리: '{query_text}'")
@@ -351,9 +314,8 @@ class HealthAIApplication:
             state.voice_data = {"text": query_text}
             self.logger.info(f"상태에 건강 상담 voice_data 설정: {state.voice_data}")
             
-            # health_metrics_graph 실행 (대화 컨텍스트 포함)
-            config = {"conversation_context": context} if context else {}
-            result = await self.health_metrics_graph.ainvoke(state, config)
+            # health_metrics_graph 실행
+            result = await self.health_metrics_graph.ainvoke(state)
             self.logger.info(f"건강 상담 그래프 처리 완료 - 결과 타입: {type(result)}")
             
             # 결과 형식에 따른 처리

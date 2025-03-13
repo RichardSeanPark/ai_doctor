@@ -2,8 +2,6 @@ from typing import Dict, Any, List, Union
 from uuid import uuid4
 from datetime import datetime, timedelta
 import logging
-import json
-import re
 
 from langgraph.graph import END
 
@@ -51,45 +49,47 @@ async def process_voice_query(state: UserState, config: Dict[str, Any] = None) -
     else:
         logger.warning(f"voice_data 형식을 인식할 수 없음: {type(voice_data)}")
         query_text = ""
-        
-    # 쿼리가 비어있는지 확인
-    if not query_text or query_text.strip() == "":
-        logger.warning("쿼리가 비어있어 처리할 수 없음")
+    
+    # 쿼리 텍스트가 비어있는 경우 state.voice_input에서 가져오기 시도
+    if not query_text:
+        logger.warning("쿼리 텍스트가 비어있음, state.voice_input에서 가져오기 시도")
+        query_text = getattr(state, 'voice_input', '')
+        logger.info(f"state.voice_input에서 가져온 쿼리: '{query_text}'")
+    
+    # 그래도 쿼리가 비어있으면 경고 로그 출력 후 기본 응답 반환
+    if not query_text:
+        logger.error("쿼리 텍스트를 찾을 수 없음")
         response = VoiceResponse(
             response_id=str(uuid4()),
             timestamp=datetime.now(),
-            response_text="죄송합니다. 음성 쿼리가 비어있어 처리할 수 없습니다. 다시 말씀해 주세요.",
-            requires_followup=False
+            query_text="",
+            response_text="죄송합니다. 음성 쿼리를 인식할 수 없습니다. 다시 말씀해주세요.",
+            requires_followup=False,
+            followup_question=None,
+            key_points=["쿼리 인식 실패"],
+            recommendations=["다시 시도하세요"]
         )
-        return {"last_response": response}
-    
-    # 2. user_id 가져오기
-    user_id = None
-    if hasattr(state, 'user_id') and state.user_id:
-        user_id = state.user_id
-        logger.info(f"상태 객체에서 user_id 가져옴: {user_id}")
-    elif "user_id" in config:
-        user_id = config.get("user_id")
-        logger.info(f"config에서 user_id 가져옴: {user_id}")
-    else:
-        user_id = "default_user"
-        logger.warning(f"user_id를 찾을 수 없어 기본값 사용: {user_id}")
-    
-    # 3. 대화 컨텍스트 가져오기
-    context = {}
-    if hasattr(state, 'conversation_context') and state.conversation_context:
-        context = state.conversation_context
-        logger.info(f"상태 객체에서 대화 컨텍스트 가져옴: {len(context)} 항목")
-    elif "conversation_context" in config:
-        context = config.get("conversation_context", {})
-        logger.info(f"config에서 대화 컨텍스트 가져옴: {len(context)} 항목")
+        # 상태에 응답을 명시적으로 저장
+        state.last_response = response
+        logger.info(f"빈 쿼리로 인한 기본 응답 생성, 상태에 저장: {state.last_response is not None}")
         
-    # 4. 음성 에이전트 생성
-    agent = get_voice_agent()
-    logger.info("음성 에이전트 생성 완료")
+        # 변경된 상태 검증
+        logger.info(f"상태를 통한 last_response: {getattr(state, 'last_response', None) is not None}")
+        if hasattr(state, 'last_response'):
+            logger.info(f"상태에 저장된 last_response ID: {state.last_response.response_id}")
+            
+        return {
+            "last_response": response,  # create_voice_segments에 매개변수로 전달됨
+            "response": response,       # 이전 버전과의 호환성 유지
+            "__arg:last_response": response  # LangGraph에서 명시적으로 인식할 수 있는 형식
+        }
     
-    # 대화 컨텍스트 포맷팅 (LLM에게 전달할 형태로)
-    context_text = format_context_for_llm(context)
+    # 음성 에이전트 생성
+    agent = get_voice_agent()
+    
+    # 사용자 정보 준비
+    user_profile = state.user_profile
+    user_name = user_profile.get("name", "")
     
     # AI에게 음성 쿼리 처리 요청
     prompt = f"""
@@ -98,10 +98,7 @@ async def process_voice_query(state: UserState, config: Dict[str, Any] = None) -
     음성 쿼리:
     "{query_text}"
     
-    {context_text}
-    
     자연스럽고 도움이 되는 응답을 제공해주세요. 응답은 음성으로 전달될 것입니다.
-    이전 대화 내용이 있다면 이를 고려하여 응답해주세요.
     
     JSON 형식으로 다음 정보를 포함하여 응답해주세요:
     {{
@@ -136,179 +133,118 @@ async def process_voice_query(state: UserState, config: Dict[str, Any] = None) -
         import json
         import re
         
-        # JSON 형식 추출 시도
-        json_string = extract_json_string(output)
-        if not json_string:
-            logger.warning("JSON 형식을 찾을 수 없음, 전체 출력을 사용")
-            json_string = output
-            
         try:
-            logger.info(f"JSON 파싱 시도: {json_string[:100]}...")
-            response_data = json.loads(json_string)
+            json_match = re.search(r'```json\s*(.*?)\s*```', output, re.DOTALL)
+            if json_match:
+                json_str = json_match.group(1)
+                logger.info("JSON 코드 블록 찾음")
+            else:
+                json_pattern = re.search(r'{.*}', output, re.DOTALL)
+                if json_pattern:
+                    json_str = json_pattern.group(0)
+                    logger.info("중괄호로 둘러싸인 JSON 데이터 찾음")
+                else:
+                    logger.error("JSON 형식의 응답을 찾을 수 없음")
+                    raise ValueError("JSON 형식의 응답을 찾을 수 없습니다.")
             
-            # 필요한 필드가 있는지 확인
-            if "response_text" not in response_data:
-                logger.warning("response_text 필드가 없음, 기본값 사용")
-                response_data["response_text"] = "죄송합니다. 응답을 생성하는 중에 오류가 발생했습니다."
-                
-            if "requires_followup" not in response_data:
-                logger.warning("requires_followup 필드가 없음, 기본값 사용")
-                response_data["requires_followup"] = False
+            logger.info(f"파싱할 JSON (처음 100자): {json_str[:100]}...")
+            data = json.loads(json_str)
+            logger.info(f"JSON 파싱 성공: {list(data.keys())}")
             
-            logger.info(f"파싱된 응답: {response_data.get('response_text')[:50]}...")
+            # 반드시 필요한 필드 검증
+            if "response_text" not in data:
+                data["response_text"] = "음성 응답을 생성할 수 없습니다. 다시 시도해주세요."
             
-            # VoiceResponse 객체 생성
+            logger.info(f"음성 쿼리 처리 완료 - 후속 질문 필요: {data.get('requires_followup', False)}")
+            
+            # 응답 생성
             response = VoiceResponse(
                 response_id=str(uuid4()),
                 timestamp=datetime.now(),
-                response_text=response_data.get("response_text", "응답 없음"),
-                requires_followup=response_data.get("requires_followup", False),
-                followup_question=response_data.get("followup_question", ""),
-                key_points=response_data.get("key_points", []),
-                recommendations=response_data.get("recommendations", [])
+                query_text=query_text,
+                response_text=data["response_text"],
+                requires_followup=data.get("requires_followup", False),
+                followup_question=data.get("followup_question") if data.get("requires_followup", False) else None,
+                key_points=data.get("key_points", ["정보 없음"]),
+                recommendations=data.get("recommendations", ["추천사항 없음"])
             )
             
-            # 상태에 응답 저장
+            # 음성 스크립트 저장
+            state.voice_scripts.append(data["response_text"])
+            
+            # 응답을 상태에 저장
             state.last_response = response
-            logger.info("응답을 상태 객체에 저장 완료")
+            logger.info(f"응답을 상태에 저장 성공: {state.last_response is not None}")
+            logger.info(f"응답 ID: {response.response_id}, 텍스트 길이: {len(response.response_text)}")
             
-            # 음성 스크립트 생성 및 저장
-            voice_script = response_data.get("response_text", "응답 없음")
-            if not hasattr(state, 'voice_scripts'):
-                state.voice_scripts = []
-            state.voice_scripts.append(voice_script)
-            logger.info(f"음성 스크립트 저장 완료 (길이: {len(voice_script)})")
+            # 다음 노드로 전달할 데이터 (상태 변경사항 명시적 반환)
+            logger.info("상태 업데이트 및 last_response 전달")
             
-            # 결과 리턴
-            logger.info("process_voice_query 함수 종료")
-            return {"last_response": response}
+            # 변경된 상태 검증
+            logger.info(f"상태를 통한 last_response: {getattr(state, 'last_response', None) is not None}")
+            if hasattr(state, 'last_response'):
+                logger.info(f"상태에 저장된 last_response ID: {state.last_response.response_id}")
             
-        except json.JSONDecodeError as e:
-            logger.error(f"JSON 파싱 오류: {str(e)}")
+            # 반환 값은 두 가지 목적으로 사용됨:
+            # 1. 직접 매개변수로 전달 - next_node(state, last_response=response)
+            # 2. 상태 업데이트 - state.last_response = response
+            logger.info("명확한 매개변수 이름으로 응답 반환")
+            return {
+                "last_response": response,  # create_voice_segments에 매개변수로 전달됨
+                "response": response,       # 이전 버전과의 호환성 유지
+                "__arg:last_response": response  # LangGraph에서 명시적으로 인식할 수 있는 형식
+            }
+        
+        except (json.JSONDecodeError, ValueError, KeyError) as e:
+            logger.error(f"응답 처리 중 오류 발생: {str(e)}")
+            
+            # 오류 발생 시 기본 응답 생성
             fallback_response = VoiceResponse(
                 response_id=str(uuid4()),
                 timestamp=datetime.now(),
-                response_text=f"죄송합니다. 응답을 처리하는 중에 오류가 발생했습니다. 다시 말씀해 주세요.",
-                requires_followup=False
+                query_text=query_text,
+                response_text="죄송합니다. 응답을 처리하는 중 오류가 발생했습니다. 다시 시도해주세요.",
+                requires_followup=False,
+                followup_question=None,
+                key_points=["오류 발생"],
+                recommendations=["다시 시도하세요"]
             )
             
-            # 오류 메시지를 음성 스크립트로 저장
-            if not hasattr(state, 'voice_scripts'):
-                state.voice_scripts = []
-            state.voice_scripts.append(fallback_response.response_text)
+            # 상태에 응답을 명시적으로 저장
+            state.last_response = fallback_response
+            logger.info(f"오류 발생으로 인한 대체 응답 생성, 상태에 저장: {state.last_response is not None}")
             
-            return {"last_response": fallback_response}
-            
+            # 상태 변경사항 명시적 반환
+            return {
+                "last_response": fallback_response,  # create_voice_segments에 매개변수로 전달됨
+                "response": fallback_response,       # 이전 버전과의 호환성 유지
+                "__arg:last_response": fallback_response  # LangGraph에서 명시적으로 인식할 수 있는 형식
+            }
+    
     except Exception as e:
         logger.error(f"음성 쿼리 처리 중 오류 발생: {str(e)}")
-        error_response = VoiceResponse(
+        
+        # 오류 발생 시 기본 응답 생성
+        fallback_response = VoiceResponse(
             response_id=str(uuid4()),
             timestamp=datetime.now(),
-            response_text=f"죄송합니다. 음성 쿼리 처리 중 오류가 발생했습니다: {str(e)}",
-            requires_followup=False
+            query_text=query_text,
+            response_text="음성 처리 중 오류가 발생했습니다. 다시 시도해주세요.",
+            requires_followup=False,
+            key_points=["오류 발생"],
+            recommendations=["다시 시도해보세요"]
         )
         
-        # 오류 메시지를 음성 스크립트로 저장
-        if not hasattr(state, 'voice_scripts'):
-            state.voice_scripts = []
-        state.voice_scripts.append(error_response.response_text)
+        # 상태에 저장
+        state.last_response = fallback_response
+        logger.info(f"오류 발생으로 인한 기본 응답 생성, 상태에 저장: {state.last_response is not None}")
         
-        return {"last_response": error_response}
-
-def extract_json_string(text: str) -> str:
-    """
-    텍스트에서 JSON 문자열을 추출합니다.
-    """
-    # 중괄호로 감싸진 텍스트 찾기
-    json_pattern = r'\{[\s\S]*\}'
-    match = re.search(json_pattern, text)
-    if match:
-        json_candidate = match.group(0)
-        try:
-            # 유효한 JSON인지 확인
-            json.loads(json_candidate)
-            return json_candidate
-        except:
-            # 유효하지 않은 경우, 다른 패턴 시도
-            pass
-    
-    # 마크다운 코드 블록에서 JSON 추출 시도
-    code_block_pattern = r'```(?:json)?\s*([\s\S]*?)\s*```'
-    match = re.search(code_block_pattern, text)
-    if match:
-        json_candidate = match.group(1)
-        # 코드 블록이 중괄호로 시작하는지 확인
-        if json_candidate.strip().startswith('{'):
-            try:
-                json.loads(json_candidate)
-                return json_candidate
-            except:
-                pass
-    
-    return ""
-
-def format_context_for_llm(context: Dict[str, Any]) -> str:
-    """
-    대화 컨텍스트를 LLM을 위한 텍스트 포맷으로 변환합니다.
-    """
-    if not context:
-        return ""
-    
-    context_text = "대화 컨텍스트 정보:\n"
-    
-    # 사용자 정보
-    if 'user' in context:
-        user = context['user']
-        context_text += f"사용자 정보: {user.get('name', '이름 없음')}, "
-        if 'gender' in user:
-            context_text += f"{user.get('gender', '성별 정보 없음')}, "
-        if 'age' in user:
-            context_text += f"{user.get('age', '나이 정보 없음')}세\n"
-    
-    # 건강 프로필 정보
-    if 'health_profile' in context:
-        health = context['health_profile']
-        context_text += "건강 정보:\n"
-        
-        # 최근 건강 지표
-        if 'latest_metrics' in health:
-            metrics = health['latest_metrics']
-            context_text += "- 최근 건강 지표: "
-            if 'weight' in metrics:
-                context_text += f"체중 {metrics['weight']}kg, "
-            if 'height' in metrics:
-                context_text += f"키 {metrics['height']}cm, "
-            if 'bmi' in metrics:
-                context_text += f"BMI {metrics['bmi']}, "
-            context_text += "\n"
-        
-        # 의학적 상태
-        if 'medical_conditions' in health and health['medical_conditions']:
-            context_text += "- 의학적 상태: " + ", ".join([c.get('condition_name', '') for c in health['medical_conditions']]) + "\n"
-        
-        # 식이 제한
-        if 'dietary_restrictions' in health and health['dietary_restrictions']:
-            context_text += "- 식이 제한: " + ", ".join([r.get('restriction_type', '') for r in health['dietary_restrictions']]) + "\n"
-    
-    # 대화 요약
-    if 'summary' in context:
-        summary = context['summary']
-        context_text += f"이전 대화 요약: {summary.get('summary_text', '요약 없음')}\n"
-        
-        # 주요 키 포인트
-        if 'key_points' in summary and summary['key_points']:
-            context_text += "주요 포인트:\n"
-            for point in summary['key_points']:
-                context_text += f"- {point}\n"
-    
-    # 최근 메시지
-    if 'messages' in context and context['messages']:
-        context_text += "\n최근 대화 내용:\n"
-        for msg in context['messages'][-3:]:  # 최근 3개 메시지만 포함
-            sender = "사용자" if msg.get('sender') == 'user' else "AI"
-            context_text += f"{sender}: {msg.get('message_text', '')}\n"
-    
-    return context_text
+        # 상태 변경사항 명시적 반환
+        return {
+            "last_response": fallback_response,  # create_voice_segments에 매개변수로 전달됨
+            "response": fallback_response,       # 이전 버전과의 호환성 유지
+            "__arg:last_response": fallback_response  # LangGraph에서 명시적으로 인식할 수 있는 형식
+        }
 
 async def conduct_voice_consultation(state: UserState, config: Dict[str, Any] = None) -> ConsultationSummary:
     logger.info("음성 상담 시작")

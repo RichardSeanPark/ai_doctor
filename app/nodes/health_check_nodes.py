@@ -12,28 +12,26 @@ from app.agents.agent_config import get_health_agent
 # 로거 설정
 logger = logging.getLogger(__name__)
 
-async def analyze_health_metrics(health_profile: Dict[str, Any], query_text: str = None) -> HealthAssessment:
-    """
-    사용자의 건강 지표를 분석하여 건강 평가를 수행하는 함수
+async def analyze_health_metrics(state: UserState) -> HealthAssessment:
+    # 사용자의 건강 지표 분석
+    logger.info(f"건강 지표 분석 시작 - 사용자 ID: {state.user_profile.get('user_id', 'unknown')}")
     
-    Args:
-        health_profile: 사용자의 건강 프로필 정보(DB에서 로드된 정보)
-        query_text: 사용자 질문 텍스트 (선택적)
+    # voice_data가 있으면 처리 (음성 건강 상담)
+    query_text = None
+    if hasattr(state, 'voice_data') and state.voice_data:
+        if isinstance(state.voice_data, dict) and 'text' in state.voice_data:
+            query_text = state.voice_data['text']
+            logger.info(f"음성 건강 상담 쿼리 감지: '{query_text}'")
+        elif isinstance(state.voice_data, str):
+            query_text = state.voice_data
+            logger.info(f"음성 건강 상담 쿼리 감지 (문자열): '{query_text}'")
     
-    Returns:
-        HealthAssessment: 건강 평가 결과
-    """
-    # 사용자 ID 로그
-    user_info = health_profile.get('user_info', {})
-    user_id = user_info.get('user_id', 'unknown')
-    logger.info(f"건강 지표 분석 시작 - 사용자 ID: {user_id}")
+    # voice_input으로부터 쿼리 추출 시도 (백업)
+    if not query_text and hasattr(state, 'voice_input') and state.voice_input:
+        query_text = state.voice_input
+        logger.info(f"voice_input에서 건강 상담 쿼리 추출: '{query_text}'")
     
-    # 쿼리 텍스트 로깅
-    if query_text:
-        logger.info(f"건강 상담 쿼리: '{query_text}'")
-    
-    # 건강 지표 준비
-    health_metrics = health_profile.get('latest_metrics', {})
+    health_metrics = state.health_metrics
     if not health_metrics:
         logger.warning("분석할 건강 지표가 없습니다")
         health_metrics = {}  # 빈 딕셔너리 초기화 (오류 방지)
@@ -41,104 +39,26 @@ async def analyze_health_metrics(health_profile: Dict[str, Any], query_text: str
     # 건강 에이전트 생성
     agent = get_health_agent()
     
-    # 건강 지표 문자열로 변환
-    metrics_lines = []
-    for key, value in health_metrics.items():
-        # BMI 계산이 있으면 특별 처리
-        if key == 'bmi' and value is not None:
-            bmi_value = value
-            if bmi_value < 18.5:
-                bmi_category = "저체중"
-            elif bmi_value < 23:
-                bmi_category = "정상"
-            elif bmi_value < 25:
-                bmi_category = "과체중"
-            elif bmi_value < 30:
-                bmi_category = "경도 비만"
-            else:
-                bmi_category = "중등도 이상 비만"
-            metrics_lines.append(f"- BMI: {bmi_value:.1f} ({bmi_category})")
-        # 혈압 처리
-        elif key == 'blood_pressure_systolic' and 'blood_pressure_diastolic' in health_metrics:
-            sys_value = value
-            dia_value = health_metrics.get('blood_pressure_diastolic')
-            if sys_value is not None and dia_value is not None:
-                metrics_lines.append(f"- 혈압: {sys_value}/{dia_value} mmHg")
-        elif key == 'blood_pressure_diastolic':
-            continue  # 이미 수축기 혈압에서 처리함
-        # 기타 지표 처리
-        elif value is not None:
-            # 각 지표별 단위 설정
-            unit = ""
-            if key == 'weight':
-                unit = "kg"
-            elif key == 'height':
-                unit = "cm"
-            elif key == 'heart_rate':
-                unit = "bpm"
-            elif key == 'blood_sugar':
-                unit = "mg/dL"
-            elif key == 'temperature':
-                unit = "°C"
-            elif key == 'oxygen_saturation':
-                unit = "%"
-            elif key == 'sleep_hours':
-                unit = "시간"
-            elif key == 'steps':
-                unit = "걸음"
-            
-            metrics_lines.append(f"- {key.replace('_', ' ').title()}: {value} {unit}")
+    # 사용자 건강 데이터 준비
+    metrics_data = "\n".join([
+        f"- {metric}: {value} {unit}"
+        for metric, (value, unit) in health_metrics.items()
+    ]) if health_metrics else "건강 지표 정보 없음"
     
-    metrics_data = "\n".join(metrics_lines) if metrics_lines else "건강 지표 정보 없음"
+    user_profile = state.user_profile
+    age = user_profile.get("age", "알 수 없음")
+    gender = user_profile.get("gender", "알 수 없음")
+    medical_conditions = user_profile.get("medical_conditions", [])
+    conditions_str = "없음" if not medical_conditions else ", ".join(medical_conditions)
     
-    # 사용자 정보 준비
-    name = user_info.get('name', '사용자')
-    birth_date = user_info.get('birth_date')
-    gender = user_info.get('gender', '알 수 없음')
-    
-    # 나이 계산
-    age = "알 수 없음"
-    if birth_date:
-        try:
-            birth_year = birth_date.year if hasattr(birth_date, 'year') else int(str(birth_date).split('-')[0])
-            current_year = datetime.now().year
-            age = current_year - birth_year
-        except:
-            pass
-    
-    # 의학적 상태 정보
-    medical_conditions = health_profile.get('medical_conditions', [])
-    conditions_text = "없음"
-    if medical_conditions:
-        condition_items = []
-        for condition in medical_conditions:
-            condition_name = condition.get('condition_name', '')
-            diagnosis_date = condition.get('diagnosis_date', '')
-            if diagnosis_date:
-                condition_items.append(f"{condition_name} (진단: {diagnosis_date})")
-            else:
-                condition_items.append(condition_name)
-        conditions_text = ", ".join(condition_items)
-    
-    # 식이 제한 정보
-    dietary_restrictions = health_profile.get('dietary_restrictions', [])
-    restrictions_text = "없음"
-    if dietary_restrictions:
-        restriction_items = []
-        for restriction in dietary_restrictions:
-            restriction_items.append(restriction.get('restriction_type', ''))
-        restrictions_text = ", ".join(restriction_items)
-    
-    # AI에게 건강 지표 분석 요청
+    # AI에게 건강 지표 분석 요청 (query_text 포함)
     prompt = f"""
     다음 사용자의 건강 지표를 분석하고 평가해주세요:
     
     사용자 정보:
-    - 이름: {name}
-    - 나이: {age}세
+    - 나이: {age}
     - 성별: {gender}
-    - 기존 질환: {conditions_text}
-    - 식이 제한: {restrictions_text}
+    - 기존 질환: {conditions_str}
     
     건강 지표:
     {metrics_data}
@@ -212,6 +132,9 @@ async def analyze_health_metrics(health_profile: Dict[str, Any], query_text: str
                 query_text=query_text   # 쿼리 텍스트도 저장 (추적 목적)
             )
             
+            # 상태에 결과 저장
+            state.health_assessment = assessment
+            
             # 건강 평가 결과 로깅
             status = assessment.health_status
             concern_count = len(assessment.concerns)
@@ -230,9 +153,11 @@ async def analyze_health_metrics(health_profile: Dict[str, Any], query_text: str
                 has_concerns=True,
                 concerns=["건강 지표 분석 중 오류가 발생했습니다."],
                 recommendations=["의사와 상담하세요.", "추가 건강 검진을 받으세요."],
-                assessment_summary=f"건강 지표 분석 중 오류: {str(e)}. 만약 건강 문제가 있다면 의사와 상담하세요.",
-                query_text=query_text
+                assessment_summary=f"건강 지표 분석 중 오류: {str(e)}. 만약 건강 문제가 있다면 의사와 상담하세요."
             )
+            
+            # 상태에 기본 평가 저장
+            state.health_assessment = default_assessment
             
             return default_assessment
     
@@ -247,9 +172,11 @@ async def analyze_health_metrics(health_profile: Dict[str, Any], query_text: str
             has_concerns=True,
             concerns=["시스템 오류로 건강 지표를 평가할 수 없습니다."],
             recommendations=["나중에 다시 시도하세요.", "지속적인 문제 발생 시 의사와 상담하세요."],
-            assessment_summary=f"시스템 오류: {str(e)}. 건강에 즉각적인 우려가 있으면 의사와 상담하세요.",
-            query_text=query_text
+            assessment_summary=f"시스템 오류: {str(e)}. 건강에 즉각적인 우려가 있으면 의사와 상담하세요."
         )
+        
+        # 상태에 오류 평가 저장
+        state.health_assessment = error_assessment
         
         return error_assessment
 

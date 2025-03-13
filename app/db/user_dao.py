@@ -89,27 +89,26 @@ class UserDAO:
             logger.warning(f"인증 실패: 비밀번호 불일치 - {username}")
             return None
     
-    def create_session(self, user_id: str, expires_at: datetime = None) -> str:
+    def create_session(self, user_id: str) -> str:
         """사용자 세션 생성"""
         session_id = str(uuid.uuid4())
-        if expires_at is None:
-            expires_at = datetime.now() + timedelta(days=7)  # 기본값: 세션 7일 유효
+        expires_at = datetime.now() + timedelta(days=7)  # 세션 7일 유효
         
         query = """
-            INSERT INTO user_sessions (session_id, user_id, expires_at)
+            INSERT INTO sessions (session_id, user_id, expires_at)
             VALUES (%s, %s, %s)
         """
         params = (session_id, user_id, expires_at)
         
         self.db.execute_query(query, params)
-        logger.info(f"세션 생성: {session_id} (사용자 ID: {user_id}, 만료: {expires_at})")
+        logger.info(f"세션 생성: {session_id} (사용자 ID: {user_id})")
         
         return session_id
     
     def validate_session(self, session_id: str) -> Optional[str]:
         """세션 유효성 검사 및 사용자 ID 반환"""
         query = """
-            SELECT user_id FROM user_sessions 
+            SELECT user_id FROM sessions 
             WHERE session_id = %s AND expires_at > NOW()
         """
         result = self.db.fetch_one(query, (session_id,))
@@ -120,6 +119,6 @@ class UserDAO:
     
     def delete_session(self, session_id: str) -> bool:
         """세션 삭제 (로그아웃)"""
-        query = "DELETE FROM user_sessions WHERE session_id = %s"
+        query = "DELETE FROM sessions WHERE session_id = %s"
         rows = self.db.execute_query(query, (session_id,))
         return rows > 0 
