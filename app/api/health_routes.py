@@ -14,6 +14,7 @@ from app.auth.auth_handler import get_current_user
 from app.nodes.health_check_nodes import analyze_health_metrics
 from app.utils.api_utils import handle_api_error  # 공통 에러 처리 함수 임포트
 from app.models.api_models import ApiResponse  # ApiResponse 모델 임포트
+from app.models.notification import UserState  # UserState 모델 임포트
 
 # 로깅 설정
 logging.basicConfig(
@@ -284,13 +285,40 @@ async def analyze_health(query: HealthQueryRequest, user=Depends(get_current_use
         # 사용자 건강 프로필 조회
         profile = health_dao.get_complete_health_profile(user["user_id"])
         
+        # UserState 객체 생성
+        user_state = UserState(
+            user_profile=profile,
+            health_metrics=profile.get("health_metrics", {}),
+            voice_data={"text": query.query_text} if query.query_text else {}
+        )
+        
         # 건강 분석 수행
-        assessment = analyze_health_metrics(profile, query.query_text)
+        assessment = await analyze_health_metrics(user_state)
+        
+        # Pydantic v2에서는 .dict() 대신 .model_dump()를 사용
+        # Pydantic v1에서는 .dict()를 사용
+        assessment_dict = {}
+        if hasattr(assessment, "model_dump"):
+            assessment_dict = assessment.model_dump()
+        elif hasattr(assessment, "dict"):
+            assessment_dict = assessment.dict()
+        else:
+            # 객체가 dict 메서드를 가지고 있지 않은 경우 직접 딕셔너리로 변환
+            assessment_dict = {
+                "assessment_id": str(assessment.assessment_id),
+                "timestamp": assessment.timestamp.isoformat(),
+                "health_status": assessment.health_status,
+                "concerns": assessment.concerns,
+                "recommendations": assessment.recommendations,
+                "has_concerns": assessment.has_concerns,
+                "assessment_summary": assessment.assessment_summary,
+                "query_text": assessment.query_text
+            }
         
         return ApiResponse(
             success=True,
             message="건강 분석 완료",
-            data={"assessment": assessment.dict()}
+            data={"assessment": assessment_dict}
         )
     except Exception as e:
         logger.error(f"건강 분석 오류: {str(e)}")
