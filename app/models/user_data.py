@@ -9,17 +9,21 @@ from datetime import datetime
 class UserCreate(BaseModel):
     """사용자 생성 요청 모델"""
     username: str = Field(..., min_length=3, max_length=50)
-    email: str
     password: str = Field(..., min_length=8)
+    email: Optional[str] = None
     full_name: Optional[str] = None
+    birth_date: Optional[str] = None  # YYYY-MM-DD 형식
+    gender: Optional[str] = None
     
     class Config:
         schema_extra = {
             "example": {
-                "username": "user123",
-                "email": "user@example.com",
-                "password": "securepassword",
-                "full_name": "홍길동"
+                "username": "jhbum01",
+                "password": "jongbum1!",
+                "email": "jhbum01@naver.com",
+                "full_name": "박종현",
+                "birth_date": "1974-08-17",
+                "gender": "male"
             }
         }
 
