@@ -1,184 +1,225 @@
-from typing import Dict, Any, List, Union
+from typing import Dict, Any, List, Union, Optional
 from uuid import uuid4
 from datetime import datetime, timedelta
 import logging
+import json
+import re
 
 from langgraph.graph import END
 
 from app.models.health_data import HealthAssessment, HealthMetrics, Symptom
 from app.models.notification import UserState, AndroidNotification
-from app.agents.agent_config import get_health_agent
+from app.agents.agent_config import get_health_agent, RealGeminiAgent
 
 # 로거 설정
 logger = logging.getLogger(__name__)
 
 async def analyze_health_metrics(state: UserState) -> HealthAssessment:
-    # 사용자의 건강 지표 분석
-    logger.info(f"건강 지표 분석 시작 - 사용자 ID: {state.user_profile.get('user_id', 'unknown')}")
-    
-    # voice_data가 있으면 처리 (음성 건강 상담)
-    query_text = None
-    if hasattr(state, 'voice_data') and state.voice_data:
-        if isinstance(state.voice_data, dict) and 'text' in state.voice_data:
-            query_text = state.voice_data['text']
-            logger.info(f"음성 건강 상담 쿼리 감지: '{query_text}'")
-        elif isinstance(state.voice_data, str):
-            query_text = state.voice_data
-            logger.info(f"음성 건강 상담 쿼리 감지 (문자열): '{query_text}'")
-    
-    # voice_input으로부터 쿼리 추출 시도 (백업)
-    if not query_text and hasattr(state, 'voice_input') and state.voice_input:
-        query_text = state.voice_input
-        logger.info(f"voice_input에서 건강 상담 쿼리 추출: '{query_text}'")
-    
-    health_metrics = state.health_metrics
-    if not health_metrics:
-        logger.warning("분석할 건강 지표가 없습니다")
-        health_metrics = {}  # 빈 딕셔너리 초기화 (오류 방지)
-    
-    # 건강 에이전트 생성
-    agent = get_health_agent()
-    
-    # 사용자 건강 데이터 준비
-    metrics_data = "\n".join([
-        f"- {metric}: {value} {unit}"
-        for metric, (value, unit) in health_metrics.items()
-    ]) if health_metrics else "건강 지표 정보 없음"
-    
-    user_profile = state.user_profile
-    age = user_profile.get("age", "알 수 없음")
-    gender = user_profile.get("gender", "알 수 없음")
-    medical_conditions = user_profile.get("medical_conditions", [])
-    conditions_str = "없음" if not medical_conditions else ", ".join(medical_conditions)
-    
-    # AI에게 건강 지표 분석 요청 (query_text 포함)
-    prompt = f"""
-    다음 사용자의 건강 지표를 분석하고 평가해주세요:
-    
-    사용자 정보:
-    - 나이: {age}
-    - 성별: {gender}
-    - 기존 질환: {conditions_str}
-    
-    건강 지표:
-    {metrics_data}
-    
-    {f"사용자 질문: {query_text}" if query_text else ""}
-    
-    위 정보를 바탕으로 건강 상태를 분석하고, 다음 형식으로 응답해주세요:
-    1. 전반적인 건강 상태 (건강함, 주의 필요, 우려됨 중 하나)
-    2. 발견된 잠재적 건강 이슈 (발견 시)
-    3. 건강 개선을 위한 구체적인 권장 사항
-    4. 건강 상태에 대한 간략한 요약
-    
-    JSON 형식으로 다음 정보를 포함하여 응답해주세요:
-    {{
-        "health_status": "건강 상태",
-        "concerns": ["잠재적 건강 이슈 1", "잠재적 건강 이슈 2"],
-        "recommendations": ["권장 사항 1", "권장 사항 2", "권장 사항 3"],
-        "assessment_summary": "건강 상태 요약"
-    }}
     """
+    사용자의 건강 지표 분석
     
-    # 에이전트 실행 및 결과 파싱
+    Args:
+        state: 사용자 상태 객체 (건강 지표 포함)
+        
+    Returns:
+        HealthAssessment: 건강 평가 결과
+    """
     try:
-        logger.info("건강 에이전트 API 호출 시작")
-        result = await agent.ainvoke({"input": prompt})
+        logger.info(f"건강 지표 분석 시작 - 사용자 ID: {state.user_id}")
         
-        # 결과 로깅
-        logger.info("건강 에이전트 API 호출 완료")
+        # 음성 쿼리 처리
+        if state.query_text:
+            logger.info(f"음성 건강 상담 쿼리 감지: '{state.query_text}'")
         
-        # AIMessage 객체에서 content 추출
-        if hasattr(result, 'content'):
-            output = result.content
-            logger.info("건강 에이전트 응답 content 속성 존재")
-        else:
-            output = str(result)
-            logger.info("건강 에이전트 응답 content 속성 없음, 결과를 문자열로 변환")
+        # 건강 지표 정보 추출
+        health_metrics = {}
         
-        # 디버깅을 위해 응답 처음 200자 로깅
-        logger.info(f"건강 에이전트 응답 (처음 200자): {output[:200]}...")
+        # UserState에서 건강 지표 데이터 추출
+        if hasattr(state, 'user_profile') and state.user_profile:
+            if 'health_metrics' in state.user_profile and state.user_profile['health_metrics']:
+                # health_metrics 딕셔너리에서 각 항목 추출
+                metrics = state.user_profile['health_metrics']
+                
+                # 필수 건강 지표 항목 추출
+                for key in ['weight', 'height', 'heart_rate', 'blood_sugar', 
+                           'oxygen_saturation', 'sleep_hours', 'steps', 'bmi', 'temperature']:
+                    if key in metrics and metrics[key] is not None:
+                        health_metrics[key] = metrics[key]
+                
+                # 혈압 처리 (다양한 포맷 지원)
+                if 'blood_pressure' in metrics and isinstance(metrics['blood_pressure'], dict):
+                    bp = metrics['blood_pressure']
+                    if 'systolic' in bp and 'diastolic' in bp and bp['systolic'] is not None and bp['diastolic'] is not None:
+                        health_metrics['blood_pressure'] = {
+                            'systolic': bp['systolic'],
+                            'diastolic': bp['diastolic']
+                        }
+                elif 'blood_pressure_systolic' in metrics and 'blood_pressure_diastolic' in metrics:
+                    if metrics['blood_pressure_systolic'] is not None and metrics['blood_pressure_diastolic'] is not None:
+                        health_metrics['blood_pressure'] = {
+                            'systolic': metrics['blood_pressure_systolic'],
+                            'diastolic': metrics['blood_pressure_diastolic']
+                        }
         
-        # JSON 문자열 추출 및 파싱
-        import json
-        import re
-        
-        try:
-            json_match = re.search(r'```json\s*(.*?)\s*```', output, re.DOTALL)
-            if json_match:
-                json_str = json_match.group(1)
-                logger.info("JSON 코드 블록 찾음")
-            else:
-                json_pattern = re.search(r'{.*}', output, re.DOTALL)
-                if json_pattern:
-                    json_str = json_pattern.group(0)
-                    logger.info("중괄호로 둘러싸인 JSON 데이터 찾음")
-                else:
-                    logger.error("JSON 형식의 응답을 찾을 수 없음")
-                    raise ValueError("JSON 형식의 응답을 찾을 수 없습니다.")
-            
-            logger.info(f"파싱할 JSON (처음 100자): {json_str[:100]}...")
-            data = json.loads(json_str)
-            
-            # 응답 생성
+        # 건강 지표가 없는 경우 로그
+        if not health_metrics:
+            logger.warning("분석할 건강 지표가 없습니다")
+            # 건강 지표가 없을 경우 바로 정보 부족 상태 반환
             assessment = HealthAssessment(
                 assessment_id=str(uuid4()),
+                user_id=state.user_id,
+                health_status="정보 부족",
+                concerns=["건강 지표 정보가 제공되지 않았습니다.", "현재 건강 상태를 평가할 수 있는 데이터가 없습니다."],
+                recommendations=["혈압, 혈당, 콜레스테롤 수치 등 기본적인 건강 지표를 측정해주세요.",
+                               "최근 건강 검진 결과를 확인해주세요.",
+                               "의사와 상담하여 건강 상태를 평가받고 필요한 조치를 취해주세요."],
                 timestamp=datetime.now(),
-                health_status=data.get("health_status", "알 수 없음"),
-                has_concerns=bool(data.get("concerns", [])),
-                concerns=data.get("concerns", []),
-                recommendations=data.get("recommendations", ["권장 사항 없음"]),
-                assessment_summary=data.get("assessment_summary", "요약 정보 없음"),
-                query_text=query_text   # 쿼리 텍스트도 저장 (추적 목적)
+                assessment_summary="제공된 건강 지표가 없어 현재 건강 상태를 평가할 수 없습니다. 건강 지표 측정을 권장합니다.",
+                has_concerns=True
             )
-            
-            # 상태에 결과 저장
-            state.health_assessment = assessment
-            
-            # 건강 평가 결과 로깅
-            status = assessment.health_status
-            concern_count = len(assessment.concerns)
-            logger.info(f"건강 평가 완료: 상태={status}, 이슈={concern_count}개")
-            
             return assessment
-            
-        except (json.JSONDecodeError, ValueError) as e:
-            logger.error(f"건강 평가 응답 처리 중 오류 발생: {str(e)}")
-            
-            # 오류 발생 시 기본 평가 생성
-            default_assessment = HealthAssessment(
-                assessment_id=str(uuid4()),
-                timestamp=datetime.now(),
-                health_status="분석 오류",
-                has_concerns=True,
-                concerns=["건강 지표 분석 중 오류가 발생했습니다."],
-                recommendations=["의사와 상담하세요.", "추가 건강 검진을 받으세요."],
-                assessment_summary=f"건강 지표 분석 중 오류: {str(e)}. 만약 건강 문제가 있다면 의사와 상담하세요."
-            )
-            
-            # 상태에 기본 평가 저장
-            state.health_assessment = default_assessment
-            
-            return default_assessment
-    
-    except Exception as e:
-        logger.error(f"건강 평가 처리 중 오류 발생: {str(e)}")
+        else:
+            logger.info(f"분석할 건강 지표: {len(health_metrics)}개 항목 - {', '.join(health_metrics.keys())}")
         
-        # 오류 발생 시 기본 평가 생성
-        error_assessment = HealthAssessment(
+        # 건강 에이전트 초기화
+        agent = get_health_agent()
+        
+        # 프롬프트 구성 - 응답 형식을 명확히 지정
+        prompt = f"""
+        다음 사용자의 건강 지표를 분석하고 평가해주세요:
+        
+        사용자 ID: {state.user_id}
+        질문: {state.query_text}
+        건강 지표: {json.dumps(health_metrics, ensure_ascii=False, indent=2)}
+        
+        매우 중요: 반드시 아래 JSON 형식으로만 응답해주세요. 다른 텍스트나 설명은 추가하지 마세요.
+        
+        {{
+            "health_status": "정상" 또는 "주의 필요" 또는 "경고" 또는 "정보 부족" 중 하나,
+            "concerns": ["우려사항1", "우려사항2"], 
+            "recommendations": ["추천사항1", "추천사항2", "추천사항3"],
+            "assessment_summary": "건강 상태에 대한 간략한 요약"
+        }}
+        
+        응답은 반드시 유효한 JSON 형식이어야 합니다. 중괄호, 따옴표, 콤마를 정확히 사용하세요.
+        정보가 부족하면 "정보 부족"을 반환하고, 비어있는 건강 지표에 대한 정보를 concerns에 추가해주세요.
+        """
+        
+        logger.info("건강 에이전트 API 호출 시작")
+        
+        # 에이전트 호출
+        response = await agent.ainvoke(prompt)
+        logger.info(f"응답 타입: {type(response)}")
+        
+        if isinstance(response, dict):
+            logger.info(f"응답 필드: {response.keys()}")
+        else:
+            logger.info(f"응답이 dict 형식이 아닙니다: {type(response)}")
+        
+        # 결과 처리
+        assessment_data = {}
+        
+        # content 필드에서 JSON 추출
+        if isinstance(response, dict) and 'content' in response:
+            logger.info("응답에서 content 필드 찾음")
+            content = response['content']
+            
+            try:
+                # JSON 코드 블록 추출 시도
+                json_str = extract_json(content)
+                if json_str:
+                    logger.info(f"JSON 데이터 추출 성공 (처음 100자): {json_str[:100]}")
+                    assessment_data = json.loads(json_str)
+                else:
+                    logger.warning("JSON 데이터를 추출할 수 없습니다")
+            except Exception as e:
+                logger.error(f"JSON 파싱 오류: {str(e)}")
+        else:
+            # 직접 응답이 올 경우 처리
+            try:
+                if isinstance(response, str):
+                    json_str = extract_json(response)
+                    if json_str:
+                        assessment_data = json.loads(json_str)
+                elif isinstance(response, dict):
+                    # 이미 dictionary 형태로 반환된 경우
+                    assessment_data = response
+            except Exception as e:
+                logger.error(f"응답 처리 오류: {str(e)}")
+                logger.warning(f"응답에 content 필드가 없거나 응답이 dict가 아닙니다: {response}")
+        
+        # 필수 필드 확인
+        if not assessment_data or "health_status" not in assessment_data:
+            logger.warning("건강 상태가 없거나 불완전한 JSON입니다. 기본값 설정")
+            assessment_data = {
+                "health_status": "정보 부족",
+                "concerns": ["건강 지표 정보 부족으로 인한 평가 불가"],
+                "recommendations": ["건강 검진을 통해 건강 지표를 업데이트하세요."],
+                "assessment_summary": "건강 상태를 평가할 수 있는 충분한 정보가 없습니다."
+            }
+        
+        # 필드가 비어 있으면 기본값 설정
+        if "concerns" not in assessment_data:
+            # 건강 지표가 충분한지 확인 (최소 5개 이상의 건강 지표가 있으면 충분하다고 판단)
+            if len(health_metrics) < 5:
+                assessment_data["concerns"] = ["건강 지표 정보 부족으로 인한 평가 불가"]
+            else:
+                assessment_data["concerns"] = []
+            
+        if "recommendations" not in assessment_data or not assessment_data["recommendations"]:
+            assessment_data["recommendations"] = ["건강 검진을 통해 건강 지표를 업데이트하세요."]
+            
+        if "assessment_summary" not in assessment_data or not assessment_data["assessment_summary"]:
+            assessment_data["assessment_summary"] = f"건강 상태: {assessment_data.get('health_status', '정보 부족')}"
+        
+        # HealthAssessment 객체 생성
+        assessment = HealthAssessment(
             assessment_id=str(uuid4()),
+            user_id=state.user_id,
+            health_status=assessment_data.get('health_status', '정보 부족'),
+            concerns=assessment_data.get('concerns', []),
+            recommendations=assessment_data.get('recommendations', []),
             timestamp=datetime.now(),
-            health_status="처리 오류",
-            has_concerns=True,
-            concerns=["시스템 오류로 건강 지표를 평가할 수 없습니다."],
-            recommendations=["나중에 다시 시도하세요.", "지속적인 문제 발생 시 의사와 상담하세요."],
-            assessment_summary=f"시스템 오류: {str(e)}. 건강에 즉각적인 우려가 있으면 의사와 상담하세요."
+            assessment_summary=assessment_data.get('assessment_summary', ''),
+            has_concerns=bool(assessment_data.get('concerns', []))
         )
         
-        # 상태에 오류 평가 저장
-        state.health_assessment = error_assessment
+        # 상태 업데이트
+        state.health_assessment = assessment
         
-        return error_assessment
+        logger.info(f"건강 평가 완료: 상태={assessment.health_status}, 이슈={len(assessment.concerns)}개")
+        
+        return assessment
+        
+    except Exception as e:
+        logger.error(f"건강 지표 분석 중 오류 발생: {str(e)}")
+        raise
+
+def extract_json(text: str) -> Optional[str]:
+    """텍스트에서 JSON 문자열을 추출하는 함수"""
+    try:
+        # JSON 코드 블록 찾기 (```json ... ``` 형식)
+        json_block_pattern = r"```(?:json)?\s*([\s\S]*?)```"
+        json_blocks = re.findall(json_block_pattern, text)
+        
+        if json_blocks:
+            logger.info("JSON 코드 블록 찾음")
+            return json_blocks[0].strip()
+        
+        # 중괄호 기반 JSON 찾기
+        json_pattern = r"(\{[\s\S]*\})"
+        json_matches = re.findall(json_pattern, text)
+        
+        if json_matches:
+            # 가장 긴 JSON 문자열을 선택 (완전한 JSON 객체일 가능성이 높음)
+            logger.info("중괄호 기반 JSON 찾음")
+            return max(json_matches, key=len).strip()
+        
+        logger.warning("텍스트에서 JSON을 찾을 수 없습니다.")
+        return None
+    except Exception as e:
+        logger.error(f"JSON 추출 중 오류: {str(e)}")
+        return None
 
 async def alert_health_concern(state: UserState, assessment: HealthAssessment) -> AndroidNotification:
     logger.info(f"건강 우려 사항 알림 생성 - 상태: {assessment.health_status}")
@@ -279,7 +320,6 @@ async def analyze_symptoms(state: UserState) -> HealthAssessment:
         output = str(result)
     
     # JSON 문자열 추출 및 파싱
-    import json
     import re
     
     json_match = re.search(r'```json\s*(.*?)\s*```', output, re.DOTALL)

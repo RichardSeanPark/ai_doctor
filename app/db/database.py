@@ -28,11 +28,11 @@ class Database:
             return
             
         self.host = os.getenv("DB_HOST", "localhost")
-        self.user = os.getenv("DB_USER", "health_app")
-        self.password = os.getenv("DB_PASSWORD", "")
-        self.db = os.getenv("DB_NAME", "health_ai_db")
+        self.user = os.getenv("DB_USER", "jhpark")
+        self.password = os.getenv("DB_PASSWORD", "jongbum1!")
+        self.db = os.getenv("DB_NAME", "healthai_db")
         self.port = int(os.getenv("DB_PORT", "3306"))
-        self.charset = "utf8mb4"
+        self.charset = os.getenv("DB_CHARSET", "utf8mb4")
         
         # 연결 풀 (connection pool)
         self.pool = None

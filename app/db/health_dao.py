@@ -69,26 +69,86 @@ class HealthDAO:
     
     def get_latest_health_metrics(self, user_id: str) -> Optional[Dict[str, Any]]:
         """사용자의 최신 건강 지표 조회"""
-        query = """
-            SELECT * FROM health_metrics
-            WHERE user_id = %s
-            ORDER BY timestamp DESC
-            LIMIT 1
-        """
-        
         try:
+            query = """
+                SELECT * FROM health_metrics
+                WHERE user_id = %s
+                ORDER BY timestamp DESC
+                LIMIT 1
+            """
+            
             result = self.db.fetch_one(query, (user_id,))
+            
             if result:
-                # 날짜/시간 형식 처리
-                if 'timestamp' in result and result['timestamp']:
-                    result['timestamp'] = result['timestamp'].isoformat()
                 logger.info(f"최신 건강 지표 조회 성공: 사용자 {user_id}")
+                return dict(result)
             else:
                 logger.info(f"최신 건강 지표 없음: 사용자 {user_id}")
-            return result
+                return None
         except Exception as e:
-            logger.error(f"건강 지표 조회 오류: {str(e)}")
-            raise
+            logger.error(f"최신 건강 지표 조회 오류: {str(e)}")
+            return None
+    
+    def get_latest_health_metrics_by_column(self, user_id: str) -> Dict[str, Any]:
+        """
+        사용자의 각 건강 지표 컬럼별로 null이 아닌 최신 데이터 조회
+        
+        Args:
+            user_id: 사용자 ID
+            
+        Returns:
+            각 컬럼별 최신 데이터가 포함된 딕셔너리
+        """
+        try:
+            # 모든 건강 지표 컬럼 목록
+            columns = [
+                'weight', 'height', 'heart_rate', 
+                'blood_pressure_systolic', 'blood_pressure_diastolic',
+                'blood_sugar', 'temperature', 'oxygen_saturation',
+                'sleep_hours', 'steps'
+            ]
+            
+            combined_metrics = {
+                'user_id': user_id,
+                'timestamp': datetime.now().isoformat()
+            }
+            
+            # 각 컬럼별로 최신 null이 아닌 값 조회
+            for column in columns:
+                query = f"""
+                    SELECT {column}, timestamp FROM health_metrics
+                    WHERE user_id = %s AND {column} IS NOT NULL
+                    ORDER BY timestamp DESC
+                    LIMIT 1
+                """
+                
+                result = self.db.fetch_one(query, (user_id,))
+                
+                if result and result[column] is not None:
+                    combined_metrics[column] = result[column]
+                    logger.debug(f"컬럼 {column}의 최신 데이터 조회: {result[column]} (날짜: {result['timestamp']})")
+            
+            # BMI 자동 계산 (키와 체중이 있는 경우)
+            if 'weight' in combined_metrics and 'height' in combined_metrics and combined_metrics['height'] > 0:
+                weight = combined_metrics['weight']
+                height_m = combined_metrics['height'] / 100.0
+                bmi = round(weight / (height_m * height_m), 1)
+                combined_metrics['bmi'] = bmi
+                logger.info(f"컬럼별 BMI 자동 계산: {bmi} (체중: {weight}kg, 키: {combined_metrics['height']}cm)")
+            
+            # 혈압 데이터가 있는 경우 blood_pressure 객체 추가
+            if 'blood_pressure_systolic' in combined_metrics and 'blood_pressure_diastolic' in combined_metrics:
+                combined_metrics['blood_pressure'] = {
+                    'systolic': combined_metrics['blood_pressure_systolic'],
+                    'diastolic': combined_metrics['blood_pressure_diastolic']
+                }
+            
+            logger.info(f"사용자 {user_id}의 컬럼별 최신 건강 지표 조회 완료: {len(combined_metrics) - 2}개 항목")
+            return combined_metrics
+            
+        except Exception as e:
+            logger.error(f"컬럼별 최신 건강 지표 조회 오류: {str(e)}")
+            return {'user_id': user_id}
     
     def get_health_metrics_history(self, user_id: str, limit: int = 10) -> List[Dict[str, Any]]:
         """사용자의 건강 지표 이력 조회"""
@@ -236,7 +296,7 @@ class HealthDAO:
         """사용자의 종합 건강 프로필 조회"""
         try:
             # 최신 건강 지표 조회
-            latest_metrics = self.get_latest_health_metrics(user_id)
+            latest_metrics = self.get_latest_health_metrics_by_column(user_id)
             
             # 의학적 상태 조회 (활성 상태만)
             medical_conditions = self.get_medical_conditions(user_id, active_only=True)

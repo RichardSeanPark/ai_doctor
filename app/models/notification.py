@@ -34,6 +34,7 @@ class ConsultationSummary(BaseModel):
 class UserState(BaseModel):
     user_profile: Dict[str, Any]
     user_id: Optional[str] = None
+    query_text: Optional[str] = None
     voice_scripts: List[str] = []
     notifications: List[AndroidNotification] = []
     current_notification: Optional[AndroidNotification] = None

@@ -288,38 +288,51 @@ async def analyze_health(query: HealthQueryRequest, user=Depends(get_current_use
         # UserState 객체 생성
         user_state = UserState(
             user_profile=profile,
+            query_text=query.query_text,
             health_metrics=profile.get("health_metrics", {}),
             voice_data={"text": query.query_text} if query.query_text else {}
         )
         
-        # 건강 분석 수행
-        assessment = await analyze_health_metrics(user_state)
+        # 디버깅: UserState 객체 로깅
+        logger.info(f"UserState 생성: profile={profile.keys()}, query_text={query.query_text}")
         
-        # Pydantic v2에서는 .dict() 대신 .model_dump()를 사용
-        # Pydantic v1에서는 .dict()를 사용
-        assessment_dict = {}
-        if hasattr(assessment, "model_dump"):
-            assessment_dict = assessment.model_dump()
-        elif hasattr(assessment, "dict"):
-            assessment_dict = assessment.dict()
-        else:
-            # 객체가 dict 메서드를 가지고 있지 않은 경우 직접 딕셔너리로 변환
-            assessment_dict = {
-                "assessment_id": str(assessment.assessment_id),
-                "timestamp": assessment.timestamp.isoformat(),
-                "health_status": assessment.health_status,
-                "concerns": assessment.concerns,
-                "recommendations": assessment.recommendations,
-                "has_concerns": assessment.has_concerns,
-                "assessment_summary": assessment.assessment_summary,
-                "query_text": assessment.query_text
-            }
-        
-        return ApiResponse(
-            success=True,
-            message="건강 분석 완료",
-            data={"assessment": assessment_dict}
-        )
+        try:
+            # 건강 분석 수행
+            logger.info("analyze_health_metrics 함수 호출 전")
+            assessment = await analyze_health_metrics(user_state)
+            logger.info("analyze_health_metrics 함수 호출 후")
+            
+            # Pydantic v2에서는 .dict() 대신 .model_dump()를 사용
+            # Pydantic v1에서는 .dict()를 사용
+            assessment_dict = {}
+            if hasattr(assessment, "model_dump"):
+                assessment_dict = assessment.model_dump()
+            elif hasattr(assessment, "dict"):
+                assessment_dict = assessment.dict()
+            else:
+                # 객체가 dict 메서드를 가지고 있지 않은 경우 직접 딕셔너리로 변환
+                assessment_dict = {
+                    "assessment_id": str(assessment.assessment_id),
+                    "timestamp": assessment.timestamp.isoformat(),
+                    "health_status": assessment.health_status,
+                    "concerns": assessment.concerns,
+                    "recommendations": assessment.recommendations,
+                    "has_concerns": assessment.has_concerns,
+                    "assessment_summary": assessment.assessment_summary,
+                    "query_text": assessment.query_text
+                }
+            
+            return ApiResponse(
+                success=True,
+                message="건강 분석 완료",
+                data={"assessment": assessment_dict}
+            )
+        except Exception as e:
+            logger.error(f"건강 분석 오류: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"건강 분석 중 오류가 발생했습니다: {str(e)}"
+            )
     except Exception as e:
         logger.error(f"건강 분석 오류: {str(e)}")
         raise HTTPException(

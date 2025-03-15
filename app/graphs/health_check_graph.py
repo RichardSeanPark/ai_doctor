@@ -11,6 +11,22 @@ from app.nodes.health_check_nodes import (
     notify_doctor
 )
 
+# 언패킹 오류 해결을 위한 래퍼 함수
+async def analyze_health_metrics_wrapper(state: UserState) -> HealthAssessment:
+    """
+    analyze_health_metrics를 래핑하여 튜플 반환 오류를 해결합니다.
+    """
+    try:
+        result = await analyze_health_metrics(state)
+        # 결과가 튜플인 경우 첫 번째 요소만 반환
+        if isinstance(result, tuple) and len(result) > 0:
+            return result[0]
+        return result
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"랩퍼 함수 오류: {str(e)}")
+        raise e
+
 def create_health_metrics_graph() -> StateGraph:
     """
     건강 지표 분석을 위한 LangGraph 생성
@@ -18,8 +34,8 @@ def create_health_metrics_graph() -> StateGraph:
     # 그래프의 상태 정의
     graph = StateGraph(UserState)
     
-    # 노드 추가
-    graph.add_node("analyze_health_metrics", analyze_health_metrics)
+    # 노드 추가 (래퍼 함수 사용)
+    graph.add_node("analyze_health_metrics", analyze_health_metrics_wrapper)
     graph.add_node("alert_health_concern", alert_health_concern)
     
     # 조건부 엣지 설정
