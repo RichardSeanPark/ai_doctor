@@ -69,7 +69,15 @@ class HealthDAO:
     
     def get_latest_health_metrics(self, user_id: str) -> Optional[Dict[str, Any]]:
         """사용자의 최신 건강 지표 조회"""
+        conn = None
         try:
+            # 새로운 연결 생성
+            conn = self.db.connect()
+            
+            # 기존 연결을 닫고 새로 연결하여 최신 데이터 확인
+            if hasattr(conn, 'ping'):
+                conn.ping(reconnect=True)
+            
             query = """
                 SELECT * FROM health_metrics
                 WHERE user_id = %s
@@ -77,7 +85,12 @@ class HealthDAO:
                 LIMIT 1
             """
             
-            result = self.db.fetch_one(query, (user_id,))
+            with conn.cursor() as cursor:
+                cursor.execute(query, (user_id,))
+                result = cursor.fetchone()
+            
+            # 명시적으로 커밋하여 트랜잭션 완료
+            conn.commit()
             
             if result:
                 logger.info(f"최신 건강 지표 조회 성공: 사용자 {user_id}")
@@ -113,6 +126,13 @@ class HealthDAO:
                 'timestamp': datetime.now().isoformat()
             }
             
+            # 새로운 연결 생성
+            conn = self.db.connect()
+            
+            # 기존 연결을 닫고 새로 연결하여 최신 데이터 확인
+            if hasattr(conn, 'ping'):
+                conn.ping(reconnect=True)
+            
             # 각 컬럼별로 최신 null이 아닌 값 조회
             for column in columns:
                 query = f"""
@@ -122,11 +142,16 @@ class HealthDAO:
                     LIMIT 1
                 """
                 
-                result = self.db.fetch_one(query, (user_id,))
+                with conn.cursor() as cursor:
+                    cursor.execute(query, (user_id,))
+                    result = cursor.fetchone()
                 
                 if result and result[column] is not None:
                     combined_metrics[column] = result[column]
                     logger.debug(f"컬럼 {column}의 최신 데이터 조회: {result[column]} (날짜: {result['timestamp']})")
+            
+            # 명시적으로 커밋하여 트랜잭션 완료
+            conn.commit()
             
             # BMI 자동 계산 (키와 체중이 있는 경우)
             if 'weight' in combined_metrics and 'height' in combined_metrics and combined_metrics['height'] > 0:
@@ -150,7 +175,7 @@ class HealthDAO:
             logger.error(f"컬럼별 최신 건강 지표 조회 오류: {str(e)}")
             return {'user_id': user_id}
     
-    def get_health_metrics_history(self, user_id: str, limit: int = 10) -> List[Dict[str, Any]]:
+    def get_health_metrics_history(self, user_id: str, limit: int = 30) -> List[Dict[str, Any]]:
         """사용자의 건강 지표 이력 조회"""
         query = """
             SELECT * FROM health_metrics
@@ -292,11 +317,69 @@ class HealthDAO:
             logger.error(f"식이 제한 조회 오류: {str(e)}")
             raise
     
+    def update_gemini_response(self, metrics_id: str, gemini_response: str) -> bool:
+        """건강 지표의 gemini_response 필드 업데이트"""
+        conn = None
+        try:
+            # 새로운 연결 생성
+            conn = self.db.connect()
+            
+            query = """
+                UPDATE health_metrics
+                SET gemini_response = %s
+                WHERE metrics_id = %s
+            """
+            
+            with conn.cursor() as cursor:
+                cursor.execute(query, (gemini_response, metrics_id))
+            
+            # 명시적으로 커밋
+            conn.commit()
+            
+            logger.info(f"gemini_response 업데이트 성공: 지표 ID {metrics_id}")
+            return True
+        except Exception as e:
+            if conn:
+                conn.rollback()
+            logger.error(f"gemini_response 업데이트 오류: {str(e)}")
+            return False
+    
     def get_complete_health_profile(self, user_id: str) -> Dict[str, Any]:
         """사용자의 종합 건강 프로필 조회"""
         try:
             # 최신 건강 지표 조회
             latest_metrics = self.get_latest_health_metrics_by_column(user_id)
+            
+            # 최신 gemini_response 조회 - 캐싱 문제 해결을 위해 직접 연결 사용
+            conn = None
+            try:
+                # 새로운 연결 생성
+                conn = self.db.connect()
+                
+                # 기존 연결을 닫고 새로 연결하여 최신 데이터 확인
+                if hasattr(conn, 'ping'):
+                    conn.ping(reconnect=True)
+                
+                query = """
+                    SELECT gemini_response
+                    FROM health_metrics
+                    WHERE user_id = %s AND gemini_response IS NOT NULL
+                    ORDER BY timestamp DESC
+                    LIMIT 1
+                """
+                
+                with conn.cursor() as cursor:
+                    cursor.execute(query, (user_id,))
+                    result = cursor.fetchone()
+                
+                # 명시적으로 커밋하여 트랜잭션 완료
+                conn.commit()
+                
+                latest_gemini_response = result['gemini_response'] if result else None
+                logger.info(f"최신 gemini_response 조회 완료: {latest_gemini_response is not None}")
+            finally:
+                # 연결 종료는 Database 클래스에서 관리
+                pass
             
             # 의학적 상태 조회 (활성 상태만)
             medical_conditions = self.get_medical_conditions(user_id, active_only=True)
@@ -310,6 +393,7 @@ class HealthDAO:
                 'health_metrics': latest_metrics or {},
                 'medical_conditions': medical_conditions or [],
                 'dietary_restrictions': dietary_restrictions or [],
+                'gemini_response': latest_gemini_response,
                 'last_updated': datetime.now().isoformat()
             }
             

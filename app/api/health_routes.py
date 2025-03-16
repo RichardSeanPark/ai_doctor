@@ -5,6 +5,7 @@ import os
 import logging
 from datetime import datetime
 from typing import Dict, Any, Optional, List
+import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from pydantic import BaseModel, Field, validator
@@ -156,7 +157,7 @@ async def get_latest_metrics(user=Depends(get_current_user)):
     )
 
 @router.get("/metrics/history", response_model=ApiResponse)
-async def get_metrics_history(limit: int = 10, user=Depends(get_current_user)):
+async def get_metrics_history(limit: int = 30, user=Depends(get_current_user)):
     """사용자의 건강 지표 이력 조회"""
     try:
         metrics_history = health_dao.get_health_metrics_history(user["user_id"], limit)
@@ -293,34 +294,58 @@ async def analyze_health(query: HealthQueryRequest, user=Depends(get_current_use
             voice_data={"text": query.query_text} if query.query_text else {}
         )
         
-        # 디버깅: UserState 객체 로깅
-        logger.info(f"UserState 생성: profile={profile.keys()}, query_text={query.query_text}")
-        
         try:
-            # 건강 분석 수행
-            logger.info("analyze_health_metrics 함수 호출 전")
-            assessment = await analyze_health_metrics(user_state)
-            logger.info("analyze_health_metrics 함수 호출 후")
-            
-            # Pydantic v2에서는 .dict() 대신 .model_dump()를 사용
-            # Pydantic v1에서는 .dict()를 사용
-            assessment_dict = {}
-            if hasattr(assessment, "model_dump"):
-                assessment_dict = assessment.model_dump()
-            elif hasattr(assessment, "dict"):
-                assessment_dict = assessment.dict()
-            else:
-                # 객체가 dict 메서드를 가지고 있지 않은 경우 직접 딕셔너리로 변환
+            # gemini_response가 있는 경우 그것을 사용
+            if profile.get("gemini_response"):
+                logger.info("기존 gemini_response 사용")
                 assessment_dict = {
-                    "assessment_id": str(assessment.assessment_id),
-                    "timestamp": assessment.timestamp.isoformat(),
-                    "health_status": assessment.health_status,
-                    "concerns": assessment.concerns,
-                    "recommendations": assessment.recommendations,
-                    "has_concerns": assessment.has_concerns,
-                    "assessment_summary": assessment.assessment_summary,
-                    "query_text": assessment.query_text
+                    "assessment_id": str(uuid.uuid4()),
+                    "timestamp": datetime.now().isoformat(),
+                    "health_status": "분석 완료",
+                    "concerns": [],
+                    "recommendations": [],
+                    "has_concerns": False,
+                    "assessment_summary": profile["gemini_response"],
+                    "query_text": query.query_text
                 }
+            else:
+                # 새로운 건강 분석 수행
+                logger.info("새로운 건강 분석 수행")
+                logger.info("analyze_health_metrics 함수 호출 전")
+                assessment = await analyze_health_metrics(user_state)
+                logger.info("analyze_health_metrics 함수 호출 후")
+                
+                # 분석 결과를 데이터베이스에 저장
+                if hasattr(assessment, "assessment_summary") and assessment.assessment_summary:
+                    logger.info("gemini_response 업데이트")
+                    # 최신 건강 지표 ID 조회
+                    latest_metrics = health_dao.get_latest_health_metrics(user["user_id"])
+                    if latest_metrics and "metrics_id" in latest_metrics:
+                        # gemini_response 업데이트
+                        health_dao.update_gemini_response(
+                            latest_metrics["metrics_id"], 
+                            assessment.assessment_summary
+                        )
+                        logger.info(f"metrics_id {latest_metrics['metrics_id']}에 gemini_response 업데이트 완료")
+                
+                # Pydantic v2에서는 .dict() 대신 .model_dump()를 사용
+                # Pydantic v1에서는 .dict()를 사용
+                if hasattr(assessment, "model_dump"):
+                    assessment_dict = assessment.model_dump()
+                elif hasattr(assessment, "dict"):
+                    assessment_dict = assessment.dict()
+                else:
+                    # 객체가 dict 메서드를 가지고 있지 않은 경우 직접 딕셔너리로 변환
+                    assessment_dict = {
+                        "assessment_id": str(assessment.assessment_id),
+                        "timestamp": assessment.timestamp.isoformat(),
+                        "health_status": assessment.health_status,
+                        "concerns": assessment.concerns,
+                        "recommendations": assessment.recommendations,
+                        "has_concerns": assessment.has_concerns,
+                        "assessment_summary": assessment.assessment_summary,
+                        "query_text": assessment.query_text
+                    }
             
             return ApiResponse(
                 success=True,
