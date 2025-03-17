@@ -282,18 +282,15 @@ suspend fun registerDeviceToken(token: String, settings: NotificationSettings): 
       "food_items": [  // 음식 항목 배열
         {
           "name": "계란",  // 음식 이름
-          "amount": "2개",  // 섭취량
-          "calories": 150  // 칼로리 (kcal)
+          "amount": "2개"  // 섭취량
         },
         {
           "name": "토스트",
-          "amount": "2조각",
-          "calories": 180
+          "amount": "2조각"
         },
         {
           "name": "우유",
-          "amount": "1잔",
-          "calories": 120
+          "amount": "1잔"
         }
       ]
     }
@@ -384,8 +381,7 @@ data class MealData(
 // 음식 항목 모델
 data class FoodItem(
     val name: String,
-    val amount: String,
-    val calories: Int
+    val amount: String
 )
 
 // 식단 조언 응답 처리 예시
@@ -395,9 +391,9 @@ viewModelScope.launch {
             MealData(
                 meal_type = "아침",
                 food_items = listOf(
-                    FoodItem("계란", "2개", 150),
-                    FoodItem("토스트", "2조각", 180),
-                    FoodItem("우유", "1잔", 120)
+                    FoodItem("계란", "2개"),
+                    FoodItem("토스트", "2조각"),
+                    FoodItem("우유", "1잔")
                 )
             )
         ),
@@ -443,6 +439,119 @@ viewModelScope.launch {
    - 이전 식단 기록 목록
    - 식단 조언 이력
    - 시간에 따른 식단 개선 추적 그래프
+
+### 식단 전문가 조언 API (Diet Specialist Advice API)
+
+#### 엔드포인트: `/api/v1/diet/specialist-advice`
+
+#### 메소드: POST
+
+#### 인증: Bearer Token 필요
+
+#### 요청 파라미터 (Request Body)
+
+```json
+{
+  "request_id": "20250317055817",  // 선택적, 제공하지 않으면 서버에서 자동 생성 (현재 시간 기반)
+  "user_id": "0b3d8b66-70ff-4cb8-bdcf-a9b7b14c70d8",  // 필수, 사용자 ID
+  "current_diet": [  // 필수, 현재 식단 정보 (배열)
+    {
+      "meal_type": "아침",  // 식사 유형 (아침, 점심, 저녁, 간식 등)
+      "food_items": [  // 음식 항목 배열
+        {
+          "name": "흰 쌀밥",  // 음식 이름
+          "amount": "1공기"  // 섭취량
+        },
+        {
+          "name": "계란 프라이",
+          "amount": "1개"
+        },
+        {
+          "name": "김치",
+          "amount": "1접시"
+        }
+      ]
+    }
+  ],
+  "dietary_restrictions": ["고혈압"],  // 선택적, 식이 제한 사항 (알레르기, 질환 등)
+  "health_goals": ["체중 감량", "균형 잡힌 식단"],  // 선택적, 건강 목표
+  "specific_concerns": "체중을 줄이면서 영양 균형을 맞추고 싶습니다."  // 선택적, 특정 관심사 또는 우려사항
+}
+```
+
+#### 응답 형식 (Response)
+
+```json
+{
+  "success": true,  // API 요청 성공 여부
+  "message": "식단 조언이 생성되었습니다",  // 응답 메시지
+  "data": {  // 응답 데이터
+    "advice": "안녕하세요. 51세 남성분의 식단에 대한 전문적인 영양 조언을 제공합니다. 현재 체중과 키를 고려했을 때 BMI가 33.7로 비만 범주에 속하며, 건강 목표가 균형 잡힌 식단이므로 체중 관리와 전반적인 건강 증진을 위한 식단 개선이 필요합니다. \n\n**1. 현재 식단 평가:**\n현재 아침 식단은 흰 쌀밥, 계란 프라이, 김치로 구성되어 있습니다. 탄수화물 위주의 식단이며, 단백질과 식이섬유 섭취량이 부족합니다. 흰 쌀밥은 혈당을 빠르게 상승시킬 수 있으며, 계란 프라이는 조리 방식에 따라 지방 함량이 높아질 수 있습니다. 김치는 발효 식품으로 유산균 섭취에 도움이 되지만, 나트륨 함량이 높을 수 있습니다. 전반적으로 영양 불균형이 우려됩니다.\n\n**2. 개선 제안:**\n* **탄수화물 종류 변경:** 흰 쌀밥 대신 현미, 잡곡, 통밀빵 등 정제되지 않은 곡물을 섭취하여 혈당 조절과 포만감을 높이는 것이 좋습니다. 밥의 양도 줄여서 섭취량을 조절하는 것이 필요합니다.\n* **단백질 섭취량 증가:** 계란 프라이 외에 닭가슴살, 생선, 두부, 콩 등 다양한 단백질 식품을 추가하여 근육 유지 및 성장에 도움을 주어야 합니다. 계란 조리 방식은 삶거나 찌는 방식으로 변경하여 지방 섭취를 줄이는 것이 좋습니다.\n* **식이섬유 섭취량 증가:** 채소와 과일을 충분히 섭취하여 식이섬유 섭취량을 늘려야 합니다. 식이섬유는 포만감을 높이고, 혈당 조절 및 배변 활동에 도움을 줍니다.\n* **나트륨 섭취량 감소:** 김치 섭취량을 줄이거나, 덜 짜게 담근 김치를 선택하는 것이 좋습니다. 국이나 찌개 섭취 시 국물은 최대한 적게 먹는 것이 좋습니다.\n* **균형 잡힌 식단 구성:** 아침, 점심, 저녁 식사 모두 탄수화물, 단백질, 지방, 비타민, 미네랄을 골고루 섭취하는 것이 중요합니다.\n\n**3. 대체 식품 추천:**\n* **흰 쌀밥 → 현미밥, 잡곡밥, 통밀빵, 고구마, 귀리**\n* **계란 프라이 → 삶은 계란, 찐 계란, 두부, 닭가슴살, 생선**\n* **김치 → 샐러드, 브로콜리, 시금치, 오이, 파프리카 등 다양한 채소**\n* **간식 → 과일, 견과류, 요거트**\n\n**4. 건강 목표 달성을 위한 팁:**\n* **규칙적인 식사:** 정해진 시간에 규칙적으로 식사하는 것이 중요합니다.\n* **천천히 식사:** 음식을 천천히 꼭꼭 씹어 먹으면 포만감을 느끼기 쉽고, 소화에도 도움이 됩니다.\n* **충분한 수분 섭취:** 하루 8잔 이상의 물을 마셔 수분 섭취량을 늘려야 합니다.\n* **꾸준한 운동:** 규칙적인 운동은 체중 관리 및 건강 증진에 필수적입니다.\n* **식단 기록:** 식단 기록을 통해 자신의 식습관을 파악하고 개선하는 데 도움이 됩니다.\n\n**5. 영양소 분석 (추정치, 아침 식단 기준):**\n* **단백질:** 약 7-8g (계란 1개 기준)\n* **탄수화물:** 약 60-70g (흰 쌀밥 1공기 기준)\n* **지방:** 약 10-15g (계란 프라이 조리 방식에 따라 다름)\n* **비타민:** 비타민 B군 (계란), 비타민 C (김치)\n* **미네랄:** 칼륨, 칼슘 (김치), 철분 (계란)\n* **전체 균형:** 탄수화물 비중이 높고, 단백질과 식이섬유 비율이 낮아 불균형합니다. 나트륨 함량도 높을 수 있습니다.\n\n**종합적으로,** 현재 식단은 개선이 필요하며, 위에 제시된 제안들을 바탕으로 균형 잡힌 식단을 구성하는 것이 중요합니다. 꾸준한 노력과 건강한 식습관을 통해 건강 목표를 달성하시길 바랍니다. 필요하다면 전문 영양사와 상담하여 개인 맞춤형 식단 계획을 세우는 것을 추천합니다."
+  }
+}
+```
+
+#### 안드로이드 앱 연동 예시
+
+```kotlin
+// 식단 전문가 조언 요청 예시
+suspend fun getDietSpecialistAdvice(
+    currentDiet: List<MealData>,
+    healthGoals: List<String>? = null,
+    dietaryRestrictions: List<String>? = null,
+    specificConcerns: String? = null
+): Result<ApiResponse> {
+    return apiService.getDietSpecialistAdvice(
+        authManager.getToken(),
+        DietAdviceRequest(
+            user_id = userManager.getUserId(),
+            current_diet = currentDiet,
+            health_goals = healthGoals,
+            dietary_restrictions = dietaryRestrictions,
+            specific_concerns = specificConcerns
+        )
+    )
+}
+
+// 식단 전문가 조언 응답 처리 예시
+viewModelScope.launch {
+    val result = dietRepository.getDietSpecialistAdvice(
+        currentDiet = listOf(
+            MealData(
+                meal_type = "아침",
+                food_items = listOf(
+                    FoodItem("흰 쌀밥", "1공기"),
+                    FoodItem("계란 프라이", "1개"),
+                    FoodItem("김치", "1접시")
+                )
+            )
+        ),
+        healthGoals = listOf("체중 감량", "균형 잡힌 식단"),
+        specificConcerns = "체중을 줄이면서 영양 균형을 맞추고 싶습니다."
+    )
+    
+    when (result) {
+        is Result.Success -> {
+            val dietAdvice = result.data.data
+            // UI 업데이트
+            _specialistAdvice.value = dietAdvice["advice"] as String
+        }
+        is Result.Error -> {
+            // 오류 처리
+            _errorMessage.value = "식단 전문가 조언을 가져오는 중 오류가 발생했습니다: ${result.exception.message}"
+        }
+    }
+}
+```
+
+#### 주요 UI 구성 요소
+
+1. **식단 전문가 조언 화면**
+   - 식단 입력 섹션 (식사 유형, 음식 항목 추가)
+   - 건강 목표 및 식이 제한 선택 옵션
+   - 특정 관심사 입력 텍스트 필드
+   - 전문가 조언 결과 표시 영역 (마크다운 형식 지원)
+   - 조언 저장 및 공유 기능
 
 ## UI/UX 가이드라인
 
