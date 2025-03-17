@@ -26,7 +26,6 @@
 - **건강 지표 입력**: 체중, 혈압, 심박수 등 건강 지표 입력 폼 (HealthMetricsRequest 모델 활용)
 - **건강 차트**: 시간에 따른 건강 지표 변화 그래프 (metrics/history API 엔드포인트 활용)
 - **건강 상태 요약**: 현재 건강 상태 및 주의사항 표시 (HealthAssessment 모델 활용)
-- **의학적 상태 관리**: 사용자의 기존 질환 관리 (MedicalConditionRequest 모델과 medical-conditions API 엔드포인트 활용)
 
 ### 3. 건강 데이터 관리 모듈
 - **약물 복용 관리**: 복용 중인 약물 등록 및 리마인더 (MedicationIntake 모델 활용)
@@ -46,10 +45,38 @@
 - **식단 입력**: 식사 종류 및 음식 항목 입력 (DietEntry, FoodItem 모델 활용)
 - **식단 분석**: 입력된 식단의 영양소 분석 결과 표시 (DietAnalysis 모델 활용)
 - **식단 기록**: 이전 식단 기록 저장 및 조회
+- **직장인 맞춤형 식단 조언**: 사용자가 섭취한/섭취 예정인 음식 내용과 양을 입력하면 건강 상태에 맞는 조언 제공 (Gemini AI 활용)
+  - **간편 식단 입력**: 외식, 배달, 편의점 음식 등 실제 섭취 가능한 음식 위주의 간편한 입력 인터페이스
+  - **영양 밸런스 분석**: 입력된 식단의 영양 밸런스 분석 및 부족한 영양소 보충 방법 제안
+  - **식사량 최적화**: 사용자의 건강 목표(체중 감량, 근육 증가 등)에 맞는 적정 섭취량 조언
+  - **대체 음식 추천**: 더 건강한 대체 음식 또는 추가 섭취 권장 음식 추천
+  - **식사 시간 조언**: 최적의 식사 시간 및 간격 제안
 - **음식 이미지 분석**: 카메라를 통한 음식 이미지 촬영 및 자동 분석 (FoodImageData, FoodImageRecognitionResult, FoodNutritionAnalysis 모델 활용)
 - **식단 계획**: 식단 계획 생성 및 관리 (DietPlan, Meal 모델 활용)
 
-### 6. 알림 모듈
+### 6. 운동 관리 모듈
+- **맞춤형 운동 추천**: 사용자의 건강 상태, 목표, 생활 패턴에 맞는 운동 추천 (Gemini AI 활용)
+  - **바쁜 직장인을 위한 시간 효율적 운동**: 짧은 시간에 효과적인 운동 루틴 제공
+  - **장소 제약 없는 운동**: 사무실, 집, 출퇴근 시간 등 다양한 환경에서 가능한 운동 제안
+  - **강도 조절**: 사용자의 체력 수준과 건강 상태에 맞는 운동 강도 조절
+  - **진행 상황 추적**: 운동 기록 및 효과 분석을 통한 동기 부여
+  - **운동 영상 연동**: 추천된 운동에 대한 가이드 영상 제공
+  - **일정 통합**: 사용자의 일정에 맞춰 최적의 운동 시간 제안
+
+### 7. 건강 관리 전문가 모듈
+- **AI 건강 코치**: Gemini AI를 활용한 개인 맞춤형 건강 관리 코치 기능
+  - **건강 데이터 통합 분석**: 사용자의 건강 지표, 식단, 운동, 수면 패턴 등을 종합적으로 분석
+  - **맞춤형 건강 조언**: 사용자의 생활 패턴과 건강 상태에 맞는 구체적인 조언 제공
+  - **목표 설정 및 관리**: 현실적인 건강 목표 설정 및 달성 과정 관리
+  - **정기적 건강 리포트**: 주간/월간 건강 상태 변화 및 개선점 리포트 제공
+  - **생활 습관 개선 제안**: 작은 변화부터 시작하는 건강한 생활 습관 형성 가이드
+  - **스트레스 관리**: 직장인의 스트레스 수준 모니터링 및 관리 방법 제안
+- **건강 질문 응답**: 건강 관련 질문에 대한 신뢰할 수 있는 정보 제공
+  - **증상 분석**: 사용자가 입력한 증상에 대한 초기 분석 및 조언
+  - **건강 지식 제공**: 건강, 질병, 영양에 관한 최신 정보 제공
+  - **의학 용어 설명**: 복잡한 의학 용어를 이해하기 쉽게 설명
+
+### 8. 알림 모듈
 - **알림 설정**: 알림 시간, 유형 등 설정
 - **알림 이력**: 받은 알림 이력 표시
 - **FCM 연동**: Firebase Cloud Messaging을 통한 푸시 알림 수신 (AndroidNotification 모델 활용)
@@ -76,6 +103,11 @@
 3. 대화 유형에 따른 전문화된 응답 생성 (건강 상담, 일반 질문 구분)
 4. 중요한 정보에 대한 별도 저장 및 하이라이트 기능
 
+### 4. 건강 관리 전문가 흐름
+1. 사용자 건강 데이터 수집 → Gemini AI 분석 요청 → 맞춤형 조언 생성 → 사용자에게 제공
+2. 사용자 피드백 수집 → 조언 품질 개선 → 더 정확한 맞춤형 조언 제공
+3. 정기적인 건강 상태 평가 및 목표 달성 진행 상황 업데이트
+
 ## API 연동
 
 ### 인증 API 연동
@@ -101,11 +133,6 @@ suspend fun addHealthMetrics(metrics: HealthMetricsRequest): Result<ApiResponse>
 // 건강 분석 요청 예시
 suspend fun analyzeHealth(query: String): Result<ApiResponse> {
     return apiService.analyzeHealth(authManager.getToken(), HealthQueryRequest(query))
-}
-
-// 의학적 상태 추가 예시
-suspend fun addMedicalCondition(condition: MedicalConditionRequest): Result<ApiResponse> {
-    return apiService.addMedicalCondition(authManager.getToken(), condition)
 }
 
 // 식이 제한 추가 예시
@@ -155,6 +182,18 @@ suspend fun analyzeDiet(dietEntry: DietEntry): Result<ApiResponse> {
     )
 }
 
+// 직장인 맞춤형 식단 조언 요청 예시
+suspend fun getDietAdvice(foodItems: List<FoodItem>, mealType: String): Result<ApiResponse> {
+    return apiService.getDietAdvice(
+        authManager.getToken(),
+        DietAdviceRequest(
+            userManager.getUserId(),
+            foodItems,
+            mealType
+        )
+    )
+}
+
 // 음식 이미지 분석 예시
 suspend fun analyzeFoodImage(imageData: ByteArray, mealType: String): Result<ApiResponse> {
     return apiService.analyzeFoodImage(
@@ -164,6 +203,44 @@ suspend fun analyzeFoodImage(imageData: ByteArray, mealType: String): Result<Api
             mealType,
             Base64.encodeToString(imageData, Base64.DEFAULT)
         )
+    )
+}
+```
+
+### 운동 관리 API 연동
+```kotlin
+// 맞춤형 운동 추천 요청 예시
+suspend fun getExerciseRecommendation(timeAvailable: Int, location: String, intensity: String): Result<ApiResponse> {
+    return apiService.getExerciseRecommendation(
+        authManager.getToken(),
+        ExerciseRecommendationRequest(
+            userManager.getUserId(),
+            timeAvailable,
+            location,
+            intensity
+        )
+    )
+}
+```
+
+### 건강 관리 전문가 API 연동
+```kotlin
+// AI 건강 코치 상담 요청 예시
+suspend fun getHealthCoachAdvice(query: String): Result<ApiResponse> {
+    return apiService.getHealthCoachAdvice(
+        authManager.getToken(),
+        HealthCoachRequest(
+            userManager.getUserId(),
+            query
+        )
+    )
+}
+
+// 주간 건강 리포트 요청 예시
+suspend fun getWeeklyHealthReport(): Result<ApiResponse> {
+    return apiService.getWeeklyHealthReport(
+        authManager.getToken(),
+        userManager.getUserId()
     )
 }
 ```
@@ -183,6 +260,190 @@ suspend fun registerDeviceToken(token: String, settings: NotificationSettings): 
 }
 ```
 
+## API 엔드포인트 상세 명세
+
+### 식단 조언 API (Diet Advice API)
+
+#### 엔드포인트: `/api/v1/diet/advice`
+
+#### 메소드: POST
+
+#### 인증: Bearer Token 필요
+
+#### 요청 파라미터 (Request Body)
+
+```json
+{
+  "request_id": "20250317055817",  // 선택적, 제공하지 않으면 서버에서 자동 생성 (현재 시간 기반)
+  "user_id": "0b3d8b66-70ff-4cb8-bdcf-a9b7b14c70d8",  // 필수, 사용자 ID
+  "current_diet": [  // 필수, 현재 식단 정보 (배열)
+    {
+      "meal_type": "아침",  // 식사 유형 (아침, 점심, 저녁, 간식 등)
+      "food_items": [  // 음식 항목 배열
+        {
+          "name": "계란",  // 음식 이름
+          "amount": "2개",  // 섭취량
+          "calories": 150  // 칼로리 (kcal)
+        },
+        {
+          "name": "토스트",
+          "amount": "2조각",
+          "calories": 180
+        },
+        {
+          "name": "우유",
+          "amount": "1잔",
+          "calories": 120
+        }
+      ]
+    }
+  ],
+  "dietary_restrictions": ["글루텐", "유당"],  // 선택적, 식이 제한 사항 (알레르기 등)
+  "health_goals": ["체중 감량", "근육 증가"],  // 선택적, 건강 목표
+  "specific_concerns": "단백질 섭취량을 늘리고 싶습니다."  // 선택적, 특정 관심사 또는 우려사항
+}
+```
+
+#### 응답 형식 (Response)
+
+```json
+{
+  "success": true,  // API 요청 성공 여부
+  "message": "식단 조언이 생성되었습니다",  // 응답 메시지
+  "data": {  // 응답 데이터
+    "response_id": "41b70cb1-6e75-4dd4-89b6-71a4cf975e77",  // 응답 ID (UUID)
+    "request_id": "20250317044439",  // 요청 ID
+    "timestamp": "2025-03-17T04:44:56.145872",  // 응답 생성 시간
+    "diet_assessment": "현재 식단은 단백질이 부족하고 탄수화물 비율이 높습니다. 총 칼로리는 450kcal로 아침 식사로는 적절하나, 영양 균형을 개선할 필요가 있습니다.",  // 식단 평가
+    "improvement_suggestions": [  // 개선 제안 (배열)
+      "단백질 섭취를 늘리기 위해 계란 흰자를 추가하거나 그릭 요거트를 간식으로 섭취하세요.",
+      "토스트 대신 통곡물 빵을 선택하여 복합 탄수화물 섭취를 늘리세요.",
+      "건강한 지방 섭취를 위해 아보카도나 견과류를 추가하세요."
+    ],
+    "alternative_foods": [  // 대체 식품 제안 (배열)
+      {
+        "original": "흰 토스트",
+        "alternative": "통밀빵"
+      },
+      {
+        "original": "우유",
+        "alternative": "무가당 두유 또는 아몬드 밀크"
+      }
+    ],
+    "health_tips": "체중 감량과 근육 증가를 동시에 이루기 위해서는 단백질 섭취를 우선시하고, 적절한 운동과 함께 균형 잡힌 식단을 유지하는 것이 중요합니다. 하루 총 칼로리는 약간 제한하되, 단백질은 체중 1kg당 1.6-2.2g을 목표로 하세요.",  // 건강 팁
+    "nutrition_analysis": {  // 영양소 분석
+      "protein": "현재 식단의 단백질 함량은 약 20g으로, 목표치(약 40-50g)에 비해 부족합니다.",
+      "carbs": "탄수화물 비율이 65%로 다소 높습니다. 50% 이하로 줄이는 것이 좋습니다.",
+      "fat": "지방 함량이 15%로 낮은 편입니다. 건강한 지방을 25-30%까지 늘리는 것이 좋습니다.",
+      "vitamins": "비타민 D와 비타민 C가 부족할 수 있습니다. 과일이나 채소를 추가하세요.",
+      "minerals": "칼슘은 충분하나 마그네슘과 철분이 부족할 수 있습니다.",
+      "balance": "전체적으로 탄수화물 비중이 높고 단백질과 건강한 지방이 부족합니다."
+    }
+  }
+}
+```
+
+#### 안드로이드 앱 연동 예시
+
+```kotlin
+// 식단 조언 요청 예시
+suspend fun getDietAdvice(
+    currentDiet: List<MealData>,
+    healthGoals: List<String>? = null,
+    dietaryRestrictions: List<String>? = null,
+    specificConcerns: String? = null
+): Result<ApiResponse> {
+    return apiService.getDietAdvice(
+        authManager.getToken(),
+        DietAdviceRequest(
+            user_id = userManager.getUserId(),
+            current_diet = currentDiet,
+            health_goals = healthGoals,
+            dietary_restrictions = dietaryRestrictions,
+            specific_concerns = specificConcerns
+        )
+    )
+}
+
+// 식단 조언 요청 모델
+data class DietAdviceRequest(
+    val user_id: String,
+    val current_diet: List<MealData>,
+    val dietary_restrictions: List<String>? = null,
+    val health_goals: List<String>? = null,
+    val specific_concerns: String? = null,
+    val request_id: String = SimpleDateFormat("yyyyMMddHHmmss", Locale.getDefault()).format(Date())
+)
+
+// 식사 데이터 모델
+data class MealData(
+    val meal_type: String,
+    val food_items: List<FoodItem>
+)
+
+// 음식 항목 모델
+data class FoodItem(
+    val name: String,
+    val amount: String,
+    val calories: Int
+)
+
+// 식단 조언 응답 처리 예시
+viewModelScope.launch {
+    val result = dietRepository.getDietAdvice(
+        currentDiet = listOf(
+            MealData(
+                meal_type = "아침",
+                food_items = listOf(
+                    FoodItem("계란", "2개", 150),
+                    FoodItem("토스트", "2조각", 180),
+                    FoodItem("우유", "1잔", 120)
+                )
+            )
+        ),
+        healthGoals = listOf("체중 감량", "근육 증가"),
+        specificConcerns = "단백질 섭취량을 늘리고 싶습니다."
+    )
+    
+    when (result) {
+        is Result.Success -> {
+            val dietAdvice = result.data.data
+            // UI 업데이트
+            _dietAssessment.value = dietAdvice["diet_assessment"] as String
+            _improvementSuggestions.value = dietAdvice["improvement_suggestions"] as List<String>
+            _alternativeFoods.value = dietAdvice["alternative_foods"] as List<Map<String, String>>
+            _healthTips.value = dietAdvice["health_tips"] as String
+            _nutritionAnalysis.value = dietAdvice["nutrition_analysis"] as Map<String, String>
+        }
+        is Result.Error -> {
+            // 오류 처리
+            _errorMessage.value = "식단 조언을 가져오는 중 오류가 발생했습니다: ${result.exception.message}"
+        }
+    }
+}
+```
+
+#### 주요 UI 구성 요소
+
+1. **식단 입력 화면**
+   - 식사 유형 선택 (아침, 점심, 저녁, 간식)
+   - 음식 항목 추가 기능 (이름, 양, 칼로리)
+   - 자주 먹는 음식 빠른 추가 기능
+   - 건강 목표 및 식이 제한 선택 옵션
+   - 특정 관심사 입력 텍스트 필드
+
+2. **식단 조언 결과 화면**
+   - 식단 평가 요약 섹션
+   - 개선 제안 목록 (카드 형태로 표시)
+   - 대체 식품 추천 섹션 (원본 → 대체 형태로 표시)
+   - 건강 팁 섹션
+   - 영양소 분석 차트 및 상세 설명
+
+3. **식단 기록 및 추적 화면**
+   - 이전 식단 기록 목록
+   - 식단 조언 이력
+   - 시간에 따른 식단 개선 추적 그래프
+
 ## UI/UX 가이드라인
 
 ### 1. 디자인 시스템
@@ -197,6 +458,8 @@ suspend fun registerDeviceToken(token: String, settings: NotificationSettings): 
 - **음성 인터페이스**: 음성 입력 중 시각적 피드백, 텍스트 전환 기능
 - **대화 기록 화면**: 과거 대화 내용과 중요 시점 하이라이트 표시
 - **식단 분석 화면**: 영양소 그래프와 권장사항 표시
+- **운동 추천 화면**: 시간별, 장소별 맞춤형 운동 카드 형태로 제공
+- **건강 코치 화면**: 대화형 인터페이스와 주요 건강 조언 카드 형태로 제공
 
 ### 3. 상호작용 패턴
 - **음성과 터치의 병행**: 모든 음성 기능은 터치로도 접근 가능
@@ -233,13 +496,15 @@ suspend fun registerDeviceToken(token: String, settings: NotificationSettings): 
 
 2. **2차 구현 사항**
    - 상세 건강 차트 및 분석
-   - 의학적 상태 및 식이 제한 관리
-   - 식단 관리 기능
+   - 식이 제한 관리
+   - 직장인 맞춤형 식단 조언 기능
+   - 바쁜 직장인을 위한 맞춤형 운동 추천
    - 약물 복용 알림
    - 대화 세션 기록 및 요약 기능
 
 3. **고급 기능 (추후 구현)**
    - 음식 이미지 분석
+   - AI 건강 코치 기능
    - 건강 목표에 따른 맞춤형 조언
    - 다른 건강 기기와 연동
    - 오프라인 모드 지원
