@@ -2,6 +2,7 @@ import uuid
 import logging
 from datetime import datetime, date
 from typing import Dict, List, Any, Optional, Union
+import json
 
 from app.db.database import Database
 
@@ -183,9 +184,10 @@ class HealthDAO:
             ORDER BY timestamp DESC
             LIMIT %s
         """
+        params = (user_id, limit)
         
         try:
-            results = self.db.fetch_all(query, (user_id, limit))
+            results = self.db.fetch_all(query, params)
             # 날짜/시간 형식 처리
             for result in results:
                 if 'timestamp' in result and result['timestamp']:
@@ -195,74 +197,6 @@ class HealthDAO:
             return results
         except Exception as e:
             logger.error(f"건강 지표 이력 조회 오류: {str(e)}")
-            raise
-    
-    def add_medical_condition(self, 
-                             user_id: str, 
-                             condition_name: str,
-                             diagnosis_date: Optional[date] = None,
-                             is_active: bool = True,
-                             notes: Optional[str] = None) -> str:
-        """의학적 상태 추가"""
-        condition_id = str(uuid.uuid4())
-        now = datetime.now()
-        
-        query = """
-            INSERT INTO medical_conditions (
-                condition_id, user_id, condition_name,
-                diagnosis_date, is_active, notes,
-                created_at, updated_at
-            ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s
-            )
-        """
-        
-        params = (
-            condition_id, user_id, condition_name,
-            diagnosis_date, is_active, notes,
-            now, now
-        )
-        
-        try:
-            self.db.execute_query(query, params)
-            logger.info(f"의학적 상태 추가 성공: 사용자 {user_id}, 상태 '{condition_name}'")
-            return condition_id
-        except Exception as e:
-            logger.error(f"의학적 상태 추가 오류: {str(e)}")
-            raise
-    
-    def get_medical_conditions(self, user_id: str, active_only: bool = True) -> List[Dict[str, Any]]:
-        """사용자의 의학적 상태 조회"""
-        if active_only:
-            query = """
-                SELECT * FROM medical_conditions
-                WHERE user_id = %s AND is_active = 1
-                ORDER BY created_at DESC
-            """
-            params = (user_id,)
-        else:
-            query = """
-                SELECT * FROM medical_conditions
-                WHERE user_id = %s
-                ORDER BY created_at DESC
-            """
-            params = (user_id,)
-        
-        try:
-            results = self.db.fetch_all(query, params)
-            # 날짜/시간 형식 처리
-            for result in results:
-                if 'diagnosis_date' in result and result['diagnosis_date']:
-                    result['diagnosis_date'] = result['diagnosis_date'].isoformat()
-                if 'created_at' in result and result['created_at']:
-                    result['created_at'] = result['created_at'].isoformat()
-                if 'updated_at' in result and result['updated_at']:
-                    result['updated_at'] = result['updated_at'].isoformat()
-            
-            logger.info(f"의학적 상태 조회 성공: 사용자 {user_id}, {len(results)}개 레코드")
-            return results
-        except Exception as e:
-            logger.error(f"의학적 상태 조회 오류: {str(e)}")
             raise
     
     def add_dietary_restriction(self, 
@@ -297,25 +231,128 @@ class HealthDAO:
             raise
     
     def get_dietary_restrictions(self, user_id: str) -> List[Dict[str, Any]]:
-        """사용자의 식이 제한 조회"""
+        """사용자의 식이 제한 사항 조회"""
         query = """
-            SELECT * FROM dietary_restrictions
-            WHERE user_id = %s
-            ORDER BY created_at DESC
+        SELECT restriction_type, description, severity
+        FROM dietary_restrictions
+        WHERE user_id = %s
         """
-        
+        return self.db.execute_query(query, (user_id,))
+    
+    def save_diet_advice(self, user_id: str, request_id: str, meal_date: str, 
+                        meal_type: str, food_items: List[Dict[str, Any]], 
+                        dietary_restrictions: List[str], health_goals: List[str],
+                        specific_concerns: str, advice_text: str) -> bool:
+        """식단 조언 기록 저장"""
         try:
-            results = self.db.fetch_all(query, (user_id,))
-            # 날짜/시간 형식 처리
-            for result in results:
-                if 'created_at' in result and result['created_at']:
-                    result['created_at'] = result['created_at'].isoformat()
+            # JSON 데이터 변환
+            food_items_json = json.dumps(food_items, ensure_ascii=False)
+            dietary_restrictions_json = json.dumps(dietary_restrictions, ensure_ascii=False) if dietary_restrictions else None
+            health_goals_json = json.dumps(health_goals, ensure_ascii=False) if health_goals else None
             
-            logger.info(f"식이 제한 조회 성공: 사용자 {user_id}, {len(results)}개 레코드")
+            # 같은 날짜, 같은 식사 유형의 기록이 있는지 확인
+            check_query = """
+            SELECT advice_id FROM diet_advice_history 
+            WHERE user_id = %s AND meal_date = %s AND meal_type = %s
+            """
+            existing_record = self.db.execute_query(check_query, (user_id, meal_date, meal_type))
+            
+            if existing_record:
+                # 기존 기록 업데이트
+                update_query = """
+                UPDATE diet_advice_history 
+                SET food_items = %s,
+                    dietary_restrictions = %s,
+                    health_goals = %s,
+                    specific_concerns = %s,
+                    advice_text = %s,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE user_id = %s AND meal_date = %s AND meal_type = %s
+                """
+                self.db.execute_query(update_query, (
+                    food_items_json,
+                    dietary_restrictions_json,
+                    health_goals_json,
+                    specific_concerns,
+                    advice_text,
+                    user_id,
+                    meal_date,
+                    meal_type
+                ))
+            else:
+                # 새 기록 생성
+                insert_query = """
+                INSERT INTO diet_advice_history (
+                    advice_id, user_id, request_id, meal_date, meal_type,
+                    food_items, dietary_restrictions, health_goals,
+                    specific_concerns, advice_text
+                ) VALUES (
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                )
+                """
+                advice_id = str(uuid.uuid4())
+                self.db.execute_query(insert_query, (
+                    advice_id,
+                    user_id,
+                    request_id,
+                    meal_date,
+                    meal_type,
+                    food_items_json,
+                    dietary_restrictions_json,
+                    health_goals_json,
+                    specific_concerns,
+                    advice_text
+                ))
+            
+            return True
+        except Exception as e:
+            logger.error(f"식단 조언 기록 저장 중 오류 발생: {str(e)}")
+            return False
+    
+    def get_diet_advice_history(self, user_id: str, start_date: str = None, end_date: str = None) -> List[Dict[str, Any]]:
+        """사용자의 식단 조언 기록 조회"""
+        try:
+            query = """
+            SELECT 
+                advice_id,
+                request_id,
+                meal_date,
+                meal_type,
+                food_items,
+                dietary_restrictions,
+                health_goals,
+                specific_concerns,
+                advice_text,
+                created_at,
+                updated_at
+            FROM diet_advice_history
+            WHERE user_id = %s
+            """
+            params = [user_id]
+            
+            if start_date:
+                query += " AND meal_date >= %s"
+                params.append(start_date)
+            if end_date:
+                query += " AND meal_date <= %s"
+                params.append(end_date)
+            
+            query += " ORDER BY meal_date DESC, meal_type"
+            
+            results = self.db.execute_query(query, tuple(params))
+            
+            # JSON 문자열을 파이썬 객체로 변환
+            for result in results:
+                result['food_items'] = json.loads(result['food_items'])
+                if result['dietary_restrictions']:
+                    result['dietary_restrictions'] = json.loads(result['dietary_restrictions'])
+                if result['health_goals']:
+                    result['health_goals'] = json.loads(result['health_goals'])
+            
             return results
         except Exception as e:
-            logger.error(f"식이 제한 조회 오류: {str(e)}")
-            raise
+            logger.error(f"식단 조언 기록 조회 중 오류 발생: {str(e)}")
+            return []
     
     def update_gemini_response(self, metrics_id: str, gemini_response: str) -> bool:
         """건강 지표의 gemini_response 필드 업데이트"""
@@ -350,8 +387,9 @@ class HealthDAO:
             # 최신 건강 지표 조회
             latest_metrics = self.get_latest_health_metrics_by_column(user_id)
             
-            # 최신 gemini_response 조회 - 캐싱 문제 해결을 위해 직접 연결 사용
+            # 사용자 기본 정보 조회 (생년월일 포함)
             conn = None
+            user_info = {}
             try:
                 # 새로운 연결 생성
                 conn = self.db.connect()
@@ -360,7 +398,30 @@ class HealthDAO:
                 if hasattr(conn, 'ping'):
                     conn.ping(reconnect=True)
                 
-                query = """
+                # 사용자 정보 조회 쿼리 (생년월일 포함)
+                user_query = """
+                    SELECT user_id, username, email, gender, birth_date, created_at
+                    FROM users
+                    WHERE user_id = %s
+                """
+                
+                with conn.cursor() as cursor:
+                    cursor.execute(user_query, (user_id,))
+                    user_result = cursor.fetchone()
+                    
+                    if user_result:
+                        user_info = {
+                            'user_id': user_result['user_id'],
+                            'username': user_result['username'],
+                            'email': user_result['email'],
+                            'gender': user_result['gender'],
+                            'birth_date': user_result['birth_date'],
+                            'created_at': user_result['created_at']
+                        }
+                        logger.info(f"사용자 정보 조회 완료: {user_id}, 생년월일: {user_result['birth_date']}")
+                
+                # 최신 gemini_response 조회
+                gemini_query = """
                     SELECT gemini_response
                     FROM health_metrics
                     WHERE user_id = %s AND gemini_response IS NOT NULL
@@ -369,7 +430,7 @@ class HealthDAO:
                 """
                 
                 with conn.cursor() as cursor:
-                    cursor.execute(query, (user_id,))
+                    cursor.execute(gemini_query, (user_id,))
                     result = cursor.fetchone()
                 
                 # 명시적으로 커밋하여 트랜잭션 완료
@@ -381,9 +442,6 @@ class HealthDAO:
                 # 연결 종료는 Database 클래스에서 관리
                 pass
             
-            # 의학적 상태 조회 (활성 상태만)
-            medical_conditions = self.get_medical_conditions(user_id, active_only=True)
-            
             # 식이 제한 조회
             dietary_restrictions = self.get_dietary_restrictions(user_id)
             
@@ -391,11 +449,14 @@ class HealthDAO:
             profile = {
                 'user_id': user_id,
                 'health_metrics': latest_metrics or {},
-                'medical_conditions': medical_conditions or [],
                 'dietary_restrictions': dietary_restrictions or [],
                 'gemini_response': latest_gemini_response,
                 'last_updated': datetime.now().isoformat()
             }
+            
+            # 사용자 정보 추가
+            if user_info:
+                profile.update(user_info)
             
             logger.info(f"종합 건강 프로필 조회 성공: 사용자 {user_id}")
             return profile

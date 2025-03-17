@@ -409,6 +409,153 @@ viewModelScope.launch {
    - 식단 조언 이력
    - 시간에 따른 식단 개선 추적 그래프
 
+### 식단 조언 히스토리 API (Diet Advice History API)
+
+#### 엔드포인트: `/api/v1/diet/history`
+
+#### 메소드: GET
+
+#### 인증: Bearer Token 필요
+
+#### 요청 파라미터 (Query Parameters)
+
+- `start_date` (선택적): 조회 시작 날짜 (YYYY-MM-DD 형식)
+- `end_date` (선택적): 조회 종료 날짜 (YYYY-MM-DD 형식)
+
+#### 응답 형식 (Response)
+
+```json
+{
+  "success": true,  // API 요청 성공 여부
+  "message": "식단 조언 히스토리가 조회되었습니다",  // 응답 메시지
+  "data": {  // 응답 데이터
+    "history": [  // 히스토리 배열
+      {
+        "advice_id": "550e8400-e29b-41d4-a716-446655440000",  // 조언 ID (UUID)
+        "request_id": "20250317055817",  // 요청 ID
+        "meal_date": "2025-03-17",  // 식사 날짜
+        "meal_type": "아침",  // 식사 유형 (아침, 점심, 저녁, 간식 등)
+        "food_items": [  // 음식 항목 배열
+          {
+            "name": "계란",  // 음식 이름
+            "amount": "2개"  // 섭취량
+          },
+          {
+            "name": "토스트",
+            "amount": "2조각"
+          },
+          {
+            "name": "우유",
+            "amount": "1잔"
+          }
+        ],
+        "health_goals": [  // 건강 목표 배열
+          "체중 감량",
+          "근육 증가"
+        ],
+        "advice_text": "현재 식단에 대한 분석 결과입니다...",  // 조언 내용
+        "created_at": "2025-03-17T05:58:17.123456",  // 생성 시간
+        "updated_at": "2025-03-17T05:58:17.123456"  // 업데이트 시간
+      },
+      // 추가 히스토리 항목들...
+    ]
+  }
+}
+```
+
+#### 안드로이드 앱 연동 예시
+
+```kotlin
+// 식단 조언 히스토리 요청 예시
+suspend fun getDietAdviceHistory(
+    startDate: String? = null,
+    endDate: String? = null
+): Result<ApiResponse> {
+    return apiService.getDietAdviceHistory(
+        authManager.getToken(),
+        startDate,
+        endDate
+    )
+}
+
+// API 서비스 인터페이스 정의
+interface ApiService {
+    // ... 기존 API 메소드들 ...
+    
+    @GET("diet/history")
+    suspend fun getDietAdviceHistory(
+        @Header("Authorization") token: String,
+        @Query("start_date") startDate: String?,
+        @Query("end_date") endDate: String?
+    ): ApiResponse
+}
+
+// 식단 조언 히스토리 응답 처리 예시
+viewModelScope.launch {
+    // 최근 30일 데이터 요청
+    val calendar = Calendar.getInstance()
+    val endDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(calendar.time)
+    
+    calendar.add(Calendar.DAY_OF_MONTH, -30)
+    val startDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(calendar.time)
+    
+    val result = dietRepository.getDietAdviceHistory(startDate, endDate)
+    
+    when (result) {
+        is Result.Success -> {
+            val historyData = result.data.data?.get("history") as? List<Map<String, Any>>
+            if (historyData != null) {
+                // 히스토리 데이터 처리
+                _dietAdviceHistory.value = historyData.map { record ->
+                    DietAdviceHistoryItem(
+                        adviceId = record["advice_id"] as String,
+                        mealDate = record["meal_date"] as String,
+                        mealType = record["meal_type"] as String,
+                        foodItems = (record["food_items"] as List<Map<String, String>>).map { 
+                            FoodItem(it["name"] ?: "", it["amount"] ?: "") 
+                        },
+                        healthGoals = record["health_goals"] as? List<String> ?: emptyList(),
+                        adviceText = record["advice_text"] as String,
+                        createdAt = record["created_at"] as String
+                    )
+                }
+            } else {
+                _dietAdviceHistory.value = emptyList()
+            }
+        }
+        is Result.Error -> {
+            // 오류 처리
+            _errorMessage.value = "식단 조언 히스토리를 가져오는 중 오류가 발생했습니다: ${result.exception.message}"
+        }
+    }
+}
+
+// 식단 조언 히스토리 아이템 모델
+data class DietAdviceHistoryItem(
+    val adviceId: String,
+    val mealDate: String,
+    val mealType: String,
+    val foodItems: List<FoodItem>,
+    val healthGoals: List<String>,
+    val adviceText: String,
+    val createdAt: String
+)
+```
+
+#### 주요 UI 구성 요소
+
+1. **식단 히스토리 목록 화면**
+   - 날짜별 식단 조언 히스토리 목록
+   - 식사 유형별 필터링 기능 (아침, 점심, 저녁, 간식)
+   - 날짜 범위 선택 기능 (캘린더 위젯)
+   - 각 항목에 식사 유형, 날짜, 주요 음식 요약 표시
+
+2. **식단 히스토리 상세 화면**
+   - 식단 조언 전체 내용 표시
+   - 입력했던 음식 항목 목록
+   - 건강 목표 태그
+   - 조언 내용 공유 기능
+
 ## UI/UX 가이드라인
 
 ### 1. 디자인 시스템

@@ -56,21 +56,7 @@ def init_database():
         sleep_hours FLOAT,
         steps INT,
         bmi FLOAT,
-        FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-    """
-    
-    # 의학적 상태 테이블 생성
-    create_medical_conditions_table = """
-    CREATE TABLE IF NOT EXISTS medical_conditions (
-        condition_id VARCHAR(36) PRIMARY KEY,
-        user_id VARCHAR(36) NOT NULL,
-        condition_name VARCHAR(100) NOT NULL,
-        diagnosis_date DATE,
-        is_active BOOLEAN DEFAULT TRUE,
-        notes TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        gemini_response TEXT,
         FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     """
@@ -88,6 +74,26 @@ def init_database():
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     """
     
+    # 식단 조언 기록 테이블 생성
+    create_diet_advice_history_table = """
+    CREATE TABLE IF NOT EXISTS diet_advice_history (
+        advice_id VARCHAR(36) PRIMARY KEY,
+        user_id VARCHAR(36) NOT NULL,
+        request_id VARCHAR(20) NOT NULL,
+        meal_date DATE NOT NULL,
+        meal_type VARCHAR(20) NOT NULL,
+        food_items JSON NOT NULL,
+        dietary_restrictions JSON,
+        health_goals JSON,
+        specific_concerns TEXT,
+        advice_text TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+        UNIQUE KEY unique_user_meal (user_id, meal_date, meal_type)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    """
+    
     try:
         # 테이블 생성 실행
         db.execute_query(create_users_table)
@@ -99,11 +105,11 @@ def init_database():
         db.execute_query(create_health_metrics_table)
         logger.info("건강 지표 테이블 생성 완료")
         
-        db.execute_query(create_medical_conditions_table)
-        logger.info("의학적 상태 테이블 생성 완료")
-        
         db.execute_query(create_dietary_restrictions_table)
         logger.info("식이 제한 테이블 생성 완료")
+        
+        db.execute_query(create_diet_advice_history_table)
+        logger.info("식단 조언 기록 테이블 생성 완료")
         
         return True
     except Exception as e:
