@@ -57,22 +57,6 @@ class HealthMetricsRequest(BaseModel):
             }
         }
 
-class MedicalConditionRequest(BaseModel):
-    condition_name: str
-    diagnosis_date: Optional[str] = None  # YYYY-MM-DD 형식
-    is_active: bool = True
-    notes: Optional[str] = None
-    
-    class Config:
-        schema_extra = {
-            "example": {
-                "condition_name": "고혈압",
-                "diagnosis_date": "2023-01-15",
-                "is_active": True,
-                "notes": "약물 치료 중"
-            }
-        }
-
 class DietaryRestrictionRequest(BaseModel):
     restriction_type: str  # "알레르기", "종교적", "건강상", "선호도" 등
     description: str
@@ -172,52 +156,6 @@ async def get_metrics_history(limit: int = 30, user=Depends(get_current_user)):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"건강 지표 이력 조회 중 오류가 발생했습니다: {str(e)}"
-        )
-
-@router.post("/medical-conditions", response_model=ApiResponse)
-async def add_medical_condition(condition: MedicalConditionRequest, user=Depends(get_current_user)):
-    """의학적 상태 추가"""
-    try:
-        diagnosis_date = None
-        if condition.diagnosis_date:
-            diagnosis_date = datetime.strptime(condition.diagnosis_date, "%Y-%m-%d").date()
-            
-        condition_id = health_dao.add_medical_condition(
-            user["user_id"],
-            condition.condition_name,
-            diagnosis_date,
-            condition.is_active,
-            condition.notes
-        )
-        
-        return ApiResponse(
-            success=True,
-            message="의학적 상태가 추가되었습니다",
-            data={"condition_id": condition_id}
-        )
-    except Exception as e:
-        logger.error(f"의학적 상태 추가 오류: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"의학적 상태 추가 중 오류가 발생했습니다: {str(e)}"
-        )
-
-@router.get("/medical-conditions", response_model=ApiResponse)
-async def get_medical_conditions(active_only: bool = True, user=Depends(get_current_user)):
-    """사용자의 의학적 상태 조회"""
-    try:
-        conditions = health_dao.get_medical_conditions(user["user_id"], active_only)
-        
-        return ApiResponse(
-            success=True,
-            message="의학적 상태 조회 성공",
-            data={"conditions": conditions}
-        )
-    except Exception as e:
-        logger.error(f"의학적 상태 조회 오류: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"의학적 상태 조회 중 오류가 발생했습니다: {str(e)}"
         )
 
 @router.post("/dietary-restrictions", response_model=ApiResponse)

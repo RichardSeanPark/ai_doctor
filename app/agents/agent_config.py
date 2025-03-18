@@ -144,6 +144,11 @@ def get_diet_agent() -> RealGeminiAgent:
     # 에이전트 생성
     return get_gemini_agent(temperature=0.2)
 
+def get_diet_specialist_agent() -> RealGeminiAgent:
+    """다이어트 전문 상담을 위한 실제 Gemini AI 에이전트를 생성합니다."""
+    # 에이전트 생성
+    return get_gemini_agent(temperature=0.2)
+
 def get_voice_agent() -> RealGeminiAgent:
     """음성 상담을 위한 실제 Gemini AI 에이전트를 생성합니다."""
     # 에이전트 생성
@@ -188,3 +193,8 @@ def get_key_points_extraction_agent() -> RealGeminiAgent:
     """핵심 포인트 추출을 위한 실제 Gemini AI 에이전트를 생성합니다."""
     # 에이전트 생성
     return get_gemini_agent(temperature=0.1)
+
+def get_exercise_specialist_agent() -> RealGeminiAgent:
+    """운동 전문가 상담을 위한 실제 Gemini AI 에이전트를 생성합니다."""
+    # 에이전트 생성 (다양한 운동 추천을 위해 약간 높은 temperature 사용)
+    return get_gemini_agent(temperature=0.3)

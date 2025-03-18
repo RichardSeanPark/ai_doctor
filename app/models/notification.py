@@ -49,13 +49,12 @@ class UserState(BaseModel):
     symptoms: Optional[List[Dict[str, Any]]] = None
     last_response: Optional[Any] = None
     diet_advice_request: Optional[Dict[str, Any]] = None
-    diet_advice_response: Optional[Any] = None
-    exercise_request: Optional[Dict[str, Any]] = None
-    exercise_recommendation: Optional[Any] = None
-    exercise_record: Optional[Any] = None
+    advice_response: Optional[Any] = None
+    diet_specialist_response: Optional[Any] = None
     health_coach_request: Optional[Dict[str, Any]] = None
     health_coach_response: Optional[Any] = None
     weekly_health_report: Optional[Any] = None
+    exercise_recommendation: Optional[Any] = None
     
     class Config:
         arbitrary_types_allowed = True 

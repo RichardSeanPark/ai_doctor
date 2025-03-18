@@ -1,39 +1,19 @@
 from pydantic import BaseModel
 from typing import List, Dict, Optional, Any
-from datetime import datetime
+from datetime import datetime, date
 from uuid import uuid4
 
 class ExerciseRecommendation(BaseModel):
     """운동 추천 모델"""
     recommendation_id: str = str(uuid4())
-    timestamp: datetime = datetime.now()
-    time_available: int  # 사용자가 운동에 할애할 수 있는 시간(분)
-    location: str  # 운동 장소 (집, 사무실, 헬스장 등)
-    intensity: str  # 운동 강도 (낮음, 중간, 높음)
-    exercises: List[Dict[str, Any]]  # 추천된 운동 목록
-    total_calories: float  # 예상 소모 칼로리
-    description: str  # 추천 설명
-    tips: List[str]  # 운동 팁
-    
-class ExerciseRecord(BaseModel):
-    """운동 기록 모델"""
-    record_id: str = str(uuid4())
     user_id: str
+    goal: str  # 근력 강화, 유산소, 체중 감량, 유연성 향상 등
+    exercise_plans: List[Dict[str, Any]] = []  # [{"name": "운동명", "description": "설명", "duration": "30분", "youtube_link": "URL"}]
+    fitness_level: Optional[str] = None  # 초보자, 중급자, 고급자
+    recommended_frequency: Optional[str] = None  # 주 3회, 매일 등
+    special_instructions: Optional[List[str]] = []  # 특별 지시사항
     timestamp: datetime = datetime.now()
-    exercise_type: str
-    duration_minutes: int
-    calories_burned: float
-    intensity: str  # 낮음, 중간, 높음
-    notes: Optional[str] = None
-    
-class ExerciseRoutine(BaseModel):
-    """운동 루틴 모델"""
-    routine_id: str = str(uuid4())
-    user_id: str
-    name: str
-    description: str
-    exercises: List[Dict[str, Any]]
-    total_duration: int
-    estimated_calories: float
-    difficulty: str  # 초급, 중급, 고급
-    tags: List[str] = []  # 태그 (예: 유산소, 근력, 스트레칭 등) 
+    recommendation_summary: str  # 운동 추천 요약
+
+    class Config:
+        arbitrary_types_allowed = True 

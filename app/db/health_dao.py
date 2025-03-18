@@ -428,7 +428,7 @@ class HealthDAO:
                 gemini_query = """
                     SELECT gemini_response
                     FROM health_metrics
-                    WHERE user_id = %s AND gemini_response IS NOT NULL
+                    WHERE user_id = %s AND gemini_response
                     ORDER BY timestamp DESC
                     LIMIT 1
                 """

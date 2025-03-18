@@ -19,7 +19,8 @@ from pydantic import BaseModel, Field
 from app.models.health_data import DietEntry, HealthMetrics, HealthAssessment
 from app.models.user_profile import UserProfile, UserGoal
 from app.main import HealthAIApplication
-from app.api import auth_routes, health_routes, voice_routes  # auth_routes 복원
+from app.api import auth_routes, health_routes, voice_routes, diet_advice_routes, health_coach_routes
+from app.api import exercise_routes  # exercise_routes 임포트 추가
 from app.models.api_models import ApiResponse  # ApiResponse를 직접 정의하지 않고 임포트
 from app.models.voice_models import VoiceQueryRequest, VoiceResponse, ConsultationRequest
 from app.models.health_data import HealthMetrics, HealthAssessment, DietEntry  # 실제 존재하는 클래스로 대체
@@ -53,6 +54,9 @@ app.add_middleware(
 app.include_router(auth_routes.router, prefix="/api/v1/auth")  # auth_routes 라우터 복원
 app.include_router(health_routes.router, prefix="/api/v1/health")
 app.include_router(voice_routes.router, prefix="/api/v1") # voice_routes 추가 (prefix는 /api/v1)
+app.include_router(diet_advice_routes.router, prefix="/api/v1/diet") # diet_advice_routes 추가
+app.include_router(health_coach_routes.router, prefix="/api/v1/health/coach") # health_coach_routes 추가
+app.include_router(exercise_routes.router) # exercise_routes 추가 (prefix는 이미 라우터에 포함됨)
 
 # Health AI 애플리케이션 인스턴스
 health_ai_app = HealthAIApplication()

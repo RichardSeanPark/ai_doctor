@@ -46,3 +46,14 @@ class WeeklyHealthReport(BaseModel):
     recommendations: List[str]
     next_steps: List[str]
     overall_status: str  # 개선, 유지, 악화 등 
+
+class WeeklyReportRequest(BaseModel):
+    """주간 건강 리포트 요청 모델"""
+    request_id: str = str(uuid4())
+    user_id: str
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+    include_metrics: bool = True
+    include_activities: bool = True
+    include_diet: bool = True
+    timestamp: datetime = datetime.now() 

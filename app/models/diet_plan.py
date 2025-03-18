@@ -1,14 +1,16 @@
-from pydantic import BaseModel
-from typing import List, Dict, Optional
+from pydantic import BaseModel, Field
+from typing import List, Dict, Optional, Any
 from datetime import date, datetime
+from uuid import uuid4
 
 class FoodItem(BaseModel):
+    """음식 항목 모델"""
     name: str
+    amount: str = "1인분"
     calories: float
-    protein: float  # 그램 
-    carbs: float    # 그램
-    fat: float      # 그램
-    amount: str     # "100g", "1개" 등
+    protein: Optional[float] = None
+    carbs: Optional[float] = None
+    fat: Optional[float] = None
     
 class Meal(BaseModel):
     meal_type: str  # "아침", "점심", "저녁", "간식"
@@ -28,38 +30,81 @@ class DietPlan(BaseModel):
     created_at: datetime
     updated_at: Optional[datetime] = None
     
-class MealRecommendation(BaseModel):
-    recommendation_id: str
-    timestamp: datetime
-    meal_type: str
+class DietEntry(BaseModel):
+    """식단 기록 모델"""
+    entry_id: str = str(uuid4())
+    user_id: Optional[str] = None
+    timestamp: datetime = datetime.now()
+    meal_type: str  # 아침, 점심, 저녁, 간식 등
     food_items: List[FoodItem]
     total_calories: float
-    nutrition_breakdown: Dict[str, float]
-    reasoning: str
-    alternatives: List[FoodItem] = []
+    image_url: Optional[str] = None
+    meal_id: Optional[str] = None
     
-    class Config:
-        arbitrary_types_allowed = True
-
-# 음식 이미지 분석용 모델
+class MealRecommendation(BaseModel):
+    """식사 추천 모델"""
+    recommendation_id: str = str(uuid4())
+    user_id: Optional[str] = None
+    timestamp: datetime = datetime.now()
+    meal_type: str
+    food_items: List[Dict[str, Any]]
+    total_calories: float
+    nutrients: Dict[str, float]
+    description: str
+    
 class FoodImageData(BaseModel):
-    """음식 이미지 분석을 위한 입력 데이터 모델"""
-    image_id: str
-    image_url: Optional[str] = None  # 원격 이미지 URL
-    image_base64: Optional[str] = None  # Base64 인코딩된 이미지 데이터
+    """음식 이미지 데이터 모델"""
+    image_id: str = str(uuid4())
     user_id: str
-    timestamp: datetime
-    meal_type: Optional[str] = None  # "아침", "점심", "저녁", "간식"
-    location: Optional[str] = None  # 위치 정보
+    meal_type: str
+    image_data: str  # Base64 인코딩된 이미지 데이터
+    timestamp: datetime = datetime.now()
     
 class FoodImageRecognitionResult(BaseModel):
     """음식 이미지 인식 결과 모델"""
+    recognition_id: str = str(uuid4())
     image_id: str
-    timestamp: datetime
-    recognized_foods: List[Dict[str, float]]  # [{"음식명": 확률}, ...]
-    dominant_food: str  # 가장 확률이 높은 음식
-    confidence_score: float  # 인식 신뢰도 (0-1)
+    timestamp: datetime = datetime.now()
+    recognized_foods: List[Dict[str, float]]  # 음식 이름과 확률
+    confidence_score: float
+    
+class FoodNutritionAnalysis(BaseModel):
+    """음식 영양소 분석 모델"""
+    analysis_id: str = str(uuid4())
+    recognition_id: str
+    timestamp: datetime = datetime.now()
+    recognized_foods: List[FoodItem]
+    estimated_total_calories: float
+    estimated_nutrition: Dict[str, float]  # 단백질, 탄수화물, 지방 등
+    nutrition_percentage: Dict[str, float]  # 영양소 비율 (%)
+    meal_quality_score: float  # 1-10 점수
+    
+class DietAdviceRequest(BaseModel):
+    """식단 조언 요청 모델"""
+    request_id: str = Field(default_factory=lambda: datetime.now().strftime("%Y%m%d%H%M%S"))
+    user_id: str
+    current_diet: List[Dict[str, Any]]
+    dietary_restrictions: Optional[List[str]] = None
+    health_goals: Optional[List[str]] = None
+    specific_concerns: Optional[str] = None
+    
+class DietSpecialistResponse(BaseModel):
+    """다이어트 전문 조언 응답 모델"""
+    response_id: str = str(uuid4())
+    request_id: str
+    timestamp: datetime = datetime.now()
+    advice: str  # 모든 다이어트 조언을 포함하는 단일 필드
 
+class DietAnalysis(BaseModel):
+    """식단 분석 결과 모델"""
+    analysis_id: str
+    user_id: str
+    timestamp: datetime
+    calories_consumed: float
+    nutrition_balance: Dict[str, float]  # {"단백질": 15.0, "탄수화물": 55.0, "지방": 30.0} (%)
+    improvement_suggestions: List[str]
+    food_recommendations: List[FoodItem] = []
+    
 class FoodNutritionAnalysis(BaseModel):
     """인식된 음식의 영양소 분석 결과 모델"""
     image_id: str
@@ -78,16 +123,4 @@ class DietAnalysis(BaseModel):
     calories_consumed: float
     nutrition_balance: Dict[str, float]  # {"단백질": 15.0, "탄수화물": 55.0, "지방": 30.0} (%)
     improvement_suggestions: List[str]
-    food_recommendations: List[FoodItem] = []
-    
-class DietEntry(BaseModel):
-    """식단 기록 모델"""
-    entry_id: str
-    user_id: str
-    timestamp: datetime
-    meal_type: str
-    food_items: List[FoodItem]
-    total_calories: float
-    nutrition_data: Dict[str, float]
-    image_id: Optional[str] = None
-    notes: Optional[str] = None 
+    food_recommendations: List[FoodItem] = [] 

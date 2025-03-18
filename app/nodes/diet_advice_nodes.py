@@ -257,8 +257,9 @@ async def provide_diet_specialist_advice(state: Dict[str, Any]) -> Dict[str, Any
         # 프롬프트 구성
         logger.debug("[DIET_SPECIALIST] 프롬프트 구성 시작")
         prompt = f"""
-        당신은 다이어트와 체중 관리 전문가입니다. 다음 사용자의 식단과 건강 목표를 분석하여 효과적인 다이어트 조언을 제공해주세요:
-        
+        당신은 세계적으로 가장 유명한 다이어트와 체중 관리 전문가입니다. 다음 사용자의 식단과 건강 목표를 분석하여 효과적인 다이어트 조언을 제공해주세요:
+        직장인일 수 있으므로 직장인에 맞게 조언을 제공해주세요. 제공된 음식에 맞게 조언을 제공해주세요.(예시. 양 조절, 금지 음식, 추가 음식)
+        운동 조언은 하지 않습니다.
         사용자 정보:
         - 성별: {user_profile.get('gender', '정보 없음')}
         - 나이: {age}
@@ -275,7 +276,7 @@ async def provide_diet_specialist_advice(state: Dict[str, Any]) -> Dict[str, Any
         
         다음 JSON 형식으로 반드시 응답해주세요:
         {{
-            "advice": "식단에 대한 당신의 전문가적인 소견을 상세히 작성해 주세요. 제어 문자 사용 금지. 형식을 구조화하여 조언을 제공해주세요."
+            "advice": "식단에 대한 당신의 전문가적인 소견을 상세히 작성해 주세요. 직작인이라는 단어 사용 금지. 제어 문자 사용 금지. 형식을 구조화하여 조언을 제공해주세요."
         }}
         """
         logger.debug("[DIET_SPECIALIST] 프롬프트 구성 완료")

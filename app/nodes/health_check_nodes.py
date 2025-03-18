@@ -86,7 +86,7 @@ async def analyze_health_metrics(state: UserState) -> HealthAssessment:
         
         # 프롬프트 구성 - 응답 형식을 명확히 지정
         prompt = f"""
-        다음 사용자의 건강 지표를 분석하고 평가해주세요:
+        당신은 세계에서 가장 유명하고 친절한 의사 입니다. 다음 사용자의 건강 지표를 분석하고 진단 및 조언을 제공해주세요.:
         
         사용자 ID: {state.user_id}
         질문: {state.query_text}
@@ -98,7 +98,7 @@ async def analyze_health_metrics(state: UserState) -> HealthAssessment:
             "health_status": "정상" 또는 "주의 필요" 또는 "경고" 또는 "정보 부족" 중 하나,
             "concerns": ["우려사항1", "우려사항2"], 
             "recommendations": ["추천사항1", "추천사항2", "추천사항3"],
-            "assessment_summary": "건강 상태에 대한 간략한 요약"
+            "assessment_summary": "건강 상태에 대한 진단 및 조언. 조언에 대해 의사 상담 방법, 음식, 운동 등 카테고리를 선정하고 해당 카테코리에 맞게 설명해주세요."
         }}
         
         응답은 반드시 유효한 JSON 형식이어야 합니다. 중괄호, 따옴표, 콤마를 정확히 사용하세요.
