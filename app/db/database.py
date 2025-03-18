@@ -71,9 +71,14 @@ class Database:
         """쓰기 쿼리 실행 (INSERT, UPDATE, DELETE)"""
         conn = self.connect()
         try:
+            # 쿼리 실행 전 로그 추가
+            logger.info(f"[DB] SQL 실행: {query}")
+            logger.info(f"[DB] 파라미터: {params}")
+            
             with conn.cursor() as cursor:
                 affected_rows = cursor.execute(query, params)
                 conn.commit()
+                logger.info(f"[DB] 실행 결과 - 영향 받은 행: {affected_rows}")
                 return affected_rows
         except pymysql.Error as e:
             conn.rollback()
@@ -95,9 +100,15 @@ class Database:
         """다중 레코드 조회"""
         conn = self.connect()
         try:
+            # 쿼리 실행 전 로그 추가
+            logger.info(f"[DB] SQL 조회: {query}")
+            logger.info(f"[DB] 파라미터: {params}")
+            
             with conn.cursor() as cursor:
                 cursor.execute(query, params)
-                return cursor.fetchall()
+                results = cursor.fetchall()
+                logger.info(f"[DB] 조회 결과 - 레코드 수: {len(results)}")
+                return results
         except pymysql.Error as e:
             logger.error(f"쿼리 실행 오류: {e}, 쿼리: {query}, 파라미터: {params}")
             raise

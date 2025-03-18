@@ -339,7 +339,11 @@ class HealthDAO:
             
             query += " ORDER BY meal_date DESC, meal_type"
             
-            results = self.db.execute_query(query, tuple(params))
+            # 쿼리와 파라미터 로깅
+            logger.info(f"[HEALTH_DAO] 식단 조언 히스토리 조회 쿼리: {query}")
+            logger.info(f"[HEALTH_DAO] 쿼리 파라미터: {params}")
+            
+            results = self.db.fetch_all(query, tuple(params))
             
             # JSON 문자열을 파이썬 객체로 변환
             for result in results:
