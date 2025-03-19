@@ -134,7 +134,7 @@ async def recommend_exercise_plan(state: Dict[str, Any]) -> Dict[str, Any]:
         logger.info(f"[EXERCISE_NODE] Gemini API 호출 시작")
         
         # AI 호출
-            response = await agent.ainvoke(prompt)
+        response = await agent.ainvoke(prompt)
         
         logger.info(f"[EXERCISE_NODE] Gemini API 응답 수신")
         
