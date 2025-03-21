@@ -15,11 +15,26 @@
 3. **특정 운동 추천 조회**: 특정 ID의 운동 추천 상세 정보 조회
    - `GET /api/v1/exercise/recommendation/{recommendation_id}`
 
-4. **운동 완료 상태 업데이트**: 운동 완료 여부 표시
-   - `PATCH /api/v1/exercise/recommendation/{recommendation_id}/completion`
+4. **운동 스케줄 생성**: 운동 일정을 생성하고 알림 설정
+   - `POST /api/v1/exercise/schedule`
 
-5. **운동 일정 예약**: 운동 일정 예약 시간 설정
-   - `PATCH /api/v1/exercise/recommendation/{recommendation_id}/schedule`
+5. **사용자 스케줄 조회**: 사용자의 모든 운동 스케줄 조회
+   - `GET /api/v1/exercise/schedules`
+
+6. **운동 추천별 스케줄 조회**: 특정 운동 추천에 대한 모든 스케줄 조회
+   - `GET /api/v1/exercise/recommendation/{recommendation_id}/schedules`
+
+7. **스케줄 업데이트**: 기존 운동 스케줄 정보 수정
+   - `PATCH /api/v1/exercise/schedule/{schedule_id}`
+
+8. **스케줄 삭제**: 운동 스케줄 삭제
+   - `DELETE /api/v1/exercise/schedule/{schedule_id}`
+
+9. **운동 완료 기록**: 운동 완료 상태 기록
+   - `POST /api/v1/exercise/completion`
+
+10. **스케줄별 완료 기록 조회**: 특정 스케줄의 완료 기록 조회
+    - `GET /api/v1/exercise/schedule/{schedule_id}/completions`
 
 ## 인증 요구사항
 
@@ -174,143 +189,268 @@ JWT 토큰은 로그인 API(`/api/v1/auth/login`)를 통해 획득할 수 있습
 }
 ```
 
-# 4. 운동 완료 상태 업데이트 API
+# 4. 운동 스케줄 생성 API
 
 ## 엔드포인트
 
-- **URL**: `/api/v1/exercise/recommendation/{recommendation_id}/completion`
-- **Method**: PATCH
+- **URL**: `/api/v1/exercise/schedule`
+- **Method**: POST
 - **Content-Type**: application/json
 - **Authorization**: Bearer Token (JWT)
 
 ## 요청 파라미터
 
-### 경로 파라미터
-
-- **recommendation_id** (String, 필수): 업데이트할 운동 추천의 고유 ID
-
 ### 요청 본문
 
 ```json
 {
-  "completed": true
+  "recommendation_id": "운동 추천 ID (필수)",
+  "day_of_week": 1,
+  "time_of_day": "14:00",
+  "duration_minutes": 30,
+  "notification_enabled": true,
+  "notification_minutes_before": 30
 }
 ```
 
-- **completed** (Boolean, 필수): 운동 완료 상태 (true: 완료, false: 미완료)
+### 필수 파라미터
+
+- **recommendation_id** (String): 운동 추천 ID
+- **day_of_week** (Integer): 요일 (0=일요일, 1=월요일, ..., 6=토요일)
+- **time_of_day** (String): 시간 (HH:MM 형식)
+
+### 선택 파라미터
+
+- **duration_minutes** (Integer): 운동 시간(분) (기본값: 30, 최소: 5, 최대: 180)
+- **notification_enabled** (Boolean): 알림 활성화 여부 (기본값: true)
+- **notification_minutes_before** (Integer): 알림을 보낼 시간(분) (기본값: 30, 최소: 5, 최대: 60)
 
 ## 응답 구조
 
 ```json
 {
-  "recommendation_id": "추천 ID",
+  "schedule_id": "스케줄 ID",
+  "recommendation_id": "운동 추천 ID",
   "user_id": "사용자 ID",
-  "goal": "운동 목적",
-  "fitness_level": "피트니스 레벨",
-  "recommended_frequency": "권장 운동 빈도",
-  "exercise_plans": [
-    {
-      "name": "운동명",
-      "description": "운동 방법 설명",
-      "duration": "권장 시간",
-      "benefits": "효과",
-      "youtube_link": "YouTube 검색 링크"
-    }
-    // 추가 운동들...
-  ],
-  "special_instructions": ["특별 지시사항1", "특별 지시사항2", ...],
-  "recommendation_summary": "전체 운동 계획 요약",
-  "timestamp": "생성 시간 (ISO 8601 형식)",
-  "completed": true,
-  "scheduled_time": null
+  "day_of_week": 1,
+  "time_of_day": "14:00",
+  "duration_minutes": 30,
+  "notification_enabled": true,
+  "notification_minutes_before": 30,
+  "is_active": true,
+  "created_at": "생성 시간 (ISO 8601 형식)",
+  "updated_at": "수정 시간 (ISO 8601 형식)"
 }
 ```
 
-# 5. 운동 일정 예약 API
+# 5. 사용자 스케줄 조회 API
 
 ## 엔드포인트
 
-- **URL**: `/api/v1/exercise/recommendation/{recommendation_id}/schedule`
+- **URL**: `/api/v1/exercise/schedules`
+- **Method**: GET
+- **Content-Type**: application/json
+- **Authorization**: Bearer Token (JWT)
+
+## 응답 구조
+
+```json
+[
+  {
+    "schedule_id": "스케줄 ID",
+    "recommendation_id": "운동 추천 ID",
+    "user_id": "사용자 ID",
+    "day_of_week": 1,
+    "time_of_day": "14:00",
+    "duration_minutes": 30,
+    "notification_enabled": true,
+    "notification_minutes_before": 30,
+    "is_active": true,
+    "created_at": "생성 시간 (ISO 8601 형식)",
+    "updated_at": "수정 시간 (ISO 8601 형식)"
+  },
+  // 추가 스케줄...
+]
+```
+
+# 6. 운동 추천별 스케줄 조회 API
+
+## 엔드포인트
+
+- **URL**: `/api/v1/exercise/recommendation/{recommendation_id}/schedules`
+- **Method**: GET
+- **Content-Type**: application/json
+- **Authorization**: Bearer Token (JWT)
+
+### 경로 파라미터
+
+- **recommendation_id** (String, 필수): 조회할 운동 추천의 고유 ID
+
+## 응답 구조
+
+```json
+[
+  {
+    "schedule_id": "스케줄 ID",
+    "recommendation_id": "운동 추천 ID",
+    "user_id": "사용자 ID",
+    "day_of_week": 1,
+    "time_of_day": "14:00",
+    "duration_minutes": 30,
+    "notification_enabled": true,
+    "notification_minutes_before": 30,
+    "is_active": true,
+    "created_at": "생성 시간 (ISO 8601 형식)",
+    "updated_at": "수정 시간 (ISO 8601 형식)"
+  },
+  // 추가 스케줄...
+]
+```
+
+# 7. 스케줄 업데이트 API
+
+## 엔드포인트
+
+- **URL**: `/api/v1/exercise/schedule/{schedule_id}`
 - **Method**: PATCH
+- **Content-Type**: application/json
+- **Authorization**: Bearer Token (JWT)
+
+### 경로 파라미터
+
+- **schedule_id** (String, 필수): 업데이트할 스케줄의 고유 ID
+
+### 요청 본문
+
+```json
+{
+  "recommendation_id": "운동 추천 ID",
+  "day_of_week": 2,
+  "time_of_day": "16:00",
+  "duration_minutes": 45,
+  "notification_enabled": true,
+  "notification_minutes_before": 15
+}
+```
+
+모든 필드는 선택적이며, 변경하려는 필드만 포함시킬 수 있습니다.
+
+## 응답 구조
+
+```json
+{
+  "schedule_id": "스케줄 ID",
+  "recommendation_id": "운동 추천 ID",
+  "user_id": "사용자 ID",
+  "day_of_week": 2,
+  "time_of_day": "16:00",
+  "duration_minutes": 45,
+  "notification_enabled": true,
+  "notification_minutes_before": 15,
+  "is_active": true,
+  "created_at": "생성 시간 (ISO 8601 형식)",
+  "updated_at": "수정 시간 (ISO 8601 형식)"
+}
+```
+
+# 8. 스케줄 삭제 API
+
+## 엔드포인트
+
+- **URL**: `/api/v1/exercise/schedule/{schedule_id}`
+- **Method**: DELETE
+- **Authorization**: Bearer Token (JWT)
+
+### 경로 파라미터
+
+- **schedule_id** (String, 필수): 삭제할 스케줄의 고유 ID
+
+## 응답
+
+- **상태 코드**: 204 No Content
+- **응답 본문**: 없음
+
+# 9. 운동 완료 기록 API
+
+## 엔드포인트
+
+- **URL**: `/api/v1/exercise/completion`
+- **Method**: POST
 - **Content-Type**: application/json
 - **Authorization**: Bearer Token (JWT)
 
 ## 요청 파라미터
 
-### 경로 파라미터
-
-- **recommendation_id** (String, 필수): 업데이트할 운동 추천의 고유 ID
-
 ### 요청 본문
 
 ```json
 {
-  "scheduled_time": "2025-03-25T14:00:00"
+  "schedule_id": "스케줄 ID (필수)",
+  "recommendation_id": "운동 추천 ID (필수)",
+  "satisfaction_rating": 4,
+  "feedback": "좋은 운동이었습니다"
 }
 ```
 
-- **scheduled_time** (String, 필수): 운동 예약 시간 (ISO 8601 형식)
+### 필수 파라미터
+
+- **schedule_id** (String): 완료한 운동 스케줄 ID
+- **recommendation_id** (String): 관련 운동 추천 ID
+
+### 선택 파라미터
+
+- **satisfaction_rating** (Integer): 만족도 평가(1-5)
+- **feedback** (String): 사용자 피드백
 
 ## 응답 구조
 
 ```json
 {
-  "recommendation_id": "추천 ID",
+  "completion_id": "완료 기록 ID",
+  "schedule_id": "스케줄 ID",
+  "recommendation_id": "운동 추천 ID",
   "user_id": "사용자 ID",
-  "goal": "운동 목적",
-  "fitness_level": "피트니스 레벨",
-  "recommended_frequency": "권장 운동 빈도",
-  "exercise_plans": [
-    {
-      "name": "운동명",
-      "description": "운동 방법 설명",
-      "duration": "권장 시간",
-      "benefits": "효과",
-      "youtube_link": "YouTube 검색 링크"
-    }
-    // 추가 운동들...
-  ],
-  "special_instructions": ["특별 지시사항1", "특별 지시사항2", ...],
-  "recommendation_summary": "전체 운동 계획 요약",
-  "timestamp": "생성 시간 (ISO 8601 형식)",
-  "completed": false,
-  "scheduled_time": "2025-03-25T14:00:00"
+  "completed_at": "완료 시간 (ISO 8601 형식)",
+  "satisfaction_rating": 4,
+  "feedback": "좋은 운동이었습니다",
+  "created_at": "생성 시간 (ISO 8601 형식)"
 }
 ```
 
-## 응답 필드 상세
+# 10. 스케줄별 완료 기록 조회 API
 
-- **recommendation_id** (String): 추천 결과의 고유 식별자
-- **user_id** (String): 요청한 사용자의 ID (토큰에서 자동으로 추출)
-- **goal** (String): 사용자가 입력한 운동 목적
-- **fitness_level** (String): 추천된 운동의 난이도 수준 ("초보자", "중급자", "고급자" 중 하나)
-- **recommended_frequency** (String): 권장 운동 빈도 (예: "주 3회", "매일" 등)
-- **exercise_plans** (Array): 추천 운동 목록
-  - **name** (String): 운동 이름
-  - **description** (String): 운동 방법 상세 설명
-  - **duration** (String): 권장 운동 시간 (예: "30분")
-  - **benefits** (String): 해당 운동의 효과
-  - **youtube_link** (String): 운동 방법을 찾아볼 수 있는 YouTube 검색 URL
-- **special_instructions** (Array): 운동 시 주의사항 목록
-- **recommendation_summary** (String): 전체 운동 계획에 대한 요약 설명
-- **timestamp** (String): 추천 생성 시간 (ISO 8601 형식)
-- **completed** (Boolean): 운동 완료 여부
-- **scheduled_time** (String): 예약된 운동 시간 (ISO 8601 형식)
+## 엔드포인트
 
-## 에러 응답
+- **URL**: `/api/v1/exercise/schedule/{schedule_id}/completions`
+- **Method**: GET
+- **Content-Type**: application/json
+- **Authorization**: Bearer Token (JWT)
+
+### 경로 파라미터
+
+- **schedule_id** (String, 필수): 조회할 스케줄의 고유 ID
+
+### 쿼리 파라미터
+
+- **limit** (Integer, 선택): 반환할 최대 결과 수 (기본값: 10, 최소: 1, 최대: 50)
+
+## 응답 구조
 
 ```json
-{
-  "detail": "에러 메시지"
-}
+[
+  {
+    "completion_id": "완료 기록 ID",
+    "schedule_id": "스케줄 ID",
+    "recommendation_id": "운동 추천 ID",
+    "user_id": "사용자 ID",
+    "completed_at": "완료 시간 (ISO 8601 형식)",
+    "satisfaction_rating": 4,
+    "feedback": "좋은 운동이었습니다",
+    "created_at": "생성 시간 (ISO 8601 형식)"
+  },
+  // 추가 완료 기록...
+]
 ```
-
-### 주요 에러 코드
-
-- **401**: 인증 실패 또는 토큰 만료
-- **403**: 권한 없음 (다른 사용자의 리소스 접근 시도)
-- **404**: 리소스를 찾을 수 없음 (존재하지 않는 추천 ID)
-- **500**: 서버 내부 오류
 
 ## 안드로이드 구현 가이드
 
@@ -339,21 +479,55 @@ interface ExerciseApiService {
         @Header("Authorization") authToken: String
     ): Response<ExerciseRecommendationResponse>
     
-    // 4. 운동 완료 상태 업데이트
-    @PATCH("api/v1/exercise/recommendation/{recommendationId}/completion")
-    suspend fun updateExerciseCompletion(
-        @Path("recommendationId") recommendationId: String,
-        @Body request: ExerciseCompletionRequest,
+    // 4. 운동 스케줄 생성
+    @POST("api/v1/exercise/schedule")
+    suspend fun createExerciseSchedule(
+        @Body request: ExerciseScheduleCreateRequest,
         @Header("Authorization") authToken: String
-    ): Response<ExerciseRecommendationResponse>
+    ): Response<ExerciseScheduleResponse>
     
-    // 5. 운동 일정 예약
-    @PATCH("api/v1/exercise/recommendation/{recommendationId}/schedule")
-    suspend fun scheduleExercise(
-        @Path("recommendationId") recommendationId: String,
-        @Body request: ExerciseScheduleRequest,
+    // 5. 사용자 스케줄 조회
+    @GET("api/v1/exercise/schedules")
+    suspend fun getUserSchedules(
         @Header("Authorization") authToken: String
-    ): Response<ExerciseRecommendationResponse>
+    ): Response<List<ExerciseScheduleResponse>>
+    
+    // 6. 운동 추천별 스케줄 조회
+    @GET("api/v1/exercise/recommendation/{recommendationId}/schedules")
+    suspend fun getRecommendationSchedules(
+        @Path("recommendationId") recommendationId: String,
+        @Header("Authorization") authToken: String
+    ): Response<List<ExerciseScheduleResponse>>
+    
+    // 7. 스케줄 업데이트
+    @PATCH("api/v1/exercise/schedule/{scheduleId}")
+    suspend fun updateExerciseSchedule(
+        @Path("scheduleId") scheduleId: String,
+        @Body request: ExerciseScheduleCreateRequest,
+        @Header("Authorization") authToken: String
+    ): Response<ExerciseScheduleResponse>
+    
+    // 8. 스케줄 삭제
+    @DELETE("api/v1/exercise/schedule/{scheduleId}")
+    suspend fun deleteExerciseSchedule(
+        @Path("scheduleId") scheduleId: String,
+        @Header("Authorization") authToken: String
+    ): Response<Unit>
+    
+    // 9. 운동 완료 기록
+    @POST("api/v1/exercise/completion")
+    suspend fun recordExerciseCompletion(
+        @Body request: ExerciseCompletionCreateRequest,
+        @Header("Authorization") authToken: String
+    ): Response<ExerciseCompletionResponse>
+    
+    // 10. 스케줄별 완료 기록 조회
+    @GET("api/v1/exercise/schedule/{scheduleId}/completions")
+    suspend fun getScheduleCompletions(
+        @Path("scheduleId") scheduleId: String,
+        @Query("limit") limit: Int = 10,
+        @Header("Authorization") authToken: String
+    ): Response<List<ExerciseCompletionResponse>>
 }
 
 // 요청 모델
@@ -363,12 +537,20 @@ data class ExerciseRecommendationRequest(
     val medical_conditions: List<String>? = null
 )
 
-data class ExerciseCompletionRequest(
-    val completed: Boolean
+data class ExerciseScheduleCreateRequest(
+    val recommendation_id: String,
+    val day_of_week: Int,  // 0=일요일, 1=월요일, ..., 6=토요일
+    val time_of_day: String,  // HH:MM 형식
+    val duration_minutes: Int = 30,
+    val notification_enabled: Boolean = true,
+    val notification_minutes_before: Int = 30
 )
 
-data class ExerciseScheduleRequest(
-    val scheduled_time: String // ISO 8601 형식 (예: "2025-03-25T14:00:00")
+data class ExerciseCompletionCreateRequest(
+    val schedule_id: String,
+    val recommendation_id: String,
+    val satisfaction_rating: Int? = null,
+    val feedback: String? = null
 )
 
 // 응답 모델
@@ -384,6 +566,31 @@ data class ExerciseRecommendationResponse(
     val timestamp: String,
     val completed: Boolean,
     val scheduled_time: String?
+)
+
+data class ExerciseScheduleResponse(
+    val schedule_id: String,
+    val recommendation_id: String,
+    val user_id: String,
+    val day_of_week: Int,
+    val time_of_day: String,
+    val duration_minutes: Int,
+    val notification_enabled: Boolean,
+    val notification_minutes_before: Int,
+    val is_active: Boolean,
+    val created_at: String,
+    val updated_at: String
+)
+
+data class ExerciseCompletionResponse(
+    val completion_id: String,
+    val schedule_id: String,
+    val recommendation_id: String,
+    val user_id: String,
+    val completed_at: String,
+    val satisfaction_rating: Int?,
+    val feedback: String?,
+    val created_at: String
 )
 
 data class ExercisePlan(
@@ -451,34 +658,154 @@ class ExerciseRepository(
         }
     }
     
-    // 4. 운동 완료 상태 업데이트
-    suspend fun updateExerciseCompletion(recommendationId: String, completed: Boolean): Result<ExerciseRecommendationResponse> {
+    // 4. 운동 스케줄 생성
+    suspend fun createExerciseSchedule(
+        recommendationId: String, 
+        dayOfWeek: Int, 
+        timeOfDay: String,
+        durationMinutes: Int = 30,
+        notificationEnabled: Boolean = true,
+        notificationMinutesBefore: Int = 30
+    ): Result<ExerciseScheduleResponse> {
         return try {
             val token = "Bearer ${authManager.getAccessToken()}"
-            val request = ExerciseCompletionRequest(completed)
-            val response = exerciseApiService.updateExerciseCompletion(recommendationId, request, token)
+            val request = ExerciseScheduleCreateRequest(
+                recommendation_id = recommendationId,
+                day_of_week = dayOfWeek,
+                time_of_day = timeOfDay,
+                duration_minutes = durationMinutes,
+                notification_enabled = notificationEnabled,
+                notification_minutes_before = notificationMinutesBefore
+            )
+            val response = exerciseApiService.createExerciseSchedule(request, token)
             
             if (response.isSuccessful && response.body() != null) {
                 Result.success(response.body()!!)
             } else {
-                Result.failure(Exception("운동 완료 상태 업데이트 실패: ${response.errorBody()?.string()}"))
+                Result.failure(Exception("운동 스케줄 생성 실패: ${response.errorBody()?.string()}"))
             }
         } catch (e: Exception) {
             Result.failure(e)
         }
     }
     
-    // 5. 운동 일정 예약
-    suspend fun scheduleExercise(recommendationId: String, scheduledTime: String): Result<ExerciseRecommendationResponse> {
+    // 5. 사용자 스케줄 조회
+    suspend fun getUserSchedules(): Result<List<ExerciseScheduleResponse>> {
         return try {
             val token = "Bearer ${authManager.getAccessToken()}"
-            val request = ExerciseScheduleRequest(scheduledTime)
-            val response = exerciseApiService.scheduleExercise(recommendationId, request, token)
+            val response = exerciseApiService.getUserSchedules(token)
             
             if (response.isSuccessful && response.body() != null) {
                 Result.success(response.body()!!)
             } else {
-                Result.failure(Exception("운동 일정 예약 실패: ${response.errorBody()?.string()}"))
+                Result.failure(Exception("사용자 스케줄 조회 실패: ${response.errorBody()?.string()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+    
+    // 6. 운동 추천별 스케줄 조회
+    suspend fun getRecommendationSchedules(recommendationId: String): Result<List<ExerciseScheduleResponse>> {
+        return try {
+            val token = "Bearer ${authManager.getAccessToken()}"
+            val response = exerciseApiService.getRecommendationSchedules(recommendationId, token)
+            
+            if (response.isSuccessful && response.body() != null) {
+                Result.success(response.body()!!)
+            } else {
+                Result.failure(Exception("운동 추천별 스케줄 조회 실패: ${response.errorBody()?.string()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+    
+    // 7. 스케줄 업데이트
+    suspend fun updateExerciseSchedule(
+        scheduleId: String,
+        recommendationId: String, 
+        dayOfWeek: Int, 
+        timeOfDay: String,
+        durationMinutes: Int = 30,
+        notificationEnabled: Boolean = true,
+        notificationMinutesBefore: Int = 30
+    ): Result<ExerciseScheduleResponse> {
+        return try {
+            val token = "Bearer ${authManager.getAccessToken()}"
+            val request = ExerciseScheduleCreateRequest(
+                recommendation_id = recommendationId,
+                day_of_week = dayOfWeek,
+                time_of_day = timeOfDay,
+                duration_minutes = durationMinutes,
+                notification_enabled = notificationEnabled,
+                notification_minutes_before = notificationMinutesBefore
+            )
+            val response = exerciseApiService.updateExerciseSchedule(scheduleId, request, token)
+            
+            if (response.isSuccessful && response.body() != null) {
+                Result.success(response.body()!!)
+            } else {
+                Result.failure(Exception("스케줄 업데이트 실패: ${response.errorBody()?.string()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+    
+    // 8. 스케줄 삭제
+    suspend fun deleteExerciseSchedule(scheduleId: String): Result<Unit> {
+        return try {
+            val token = "Bearer ${authManager.getAccessToken()}"
+            val response = exerciseApiService.deleteExerciseSchedule(scheduleId, token)
+            
+            if (response.isSuccessful) {
+                Result.success(Unit)
+            } else {
+                Result.failure(Exception("스케줄 삭제 실패: ${response.errorBody()?.string()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+    
+    // 9. 운동 완료 기록
+    suspend fun recordExerciseCompletion(
+        scheduleId: String,
+        recommendationId: String,
+        satisfactionRating: Int? = null,
+        feedback: String? = null
+    ): Result<ExerciseCompletionResponse> {
+        return try {
+            val token = "Bearer ${authManager.getAccessToken()}"
+            val request = ExerciseCompletionCreateRequest(
+                schedule_id = scheduleId,
+                recommendation_id = recommendationId,
+                satisfaction_rating = satisfactionRating,
+                feedback = feedback
+            )
+            val response = exerciseApiService.recordExerciseCompletion(request, token)
+            
+            if (response.isSuccessful && response.body() != null) {
+                Result.success(response.body()!!)
+            } else {
+                Result.failure(Exception("운동 완료 기록 실패: ${response.errorBody()?.string()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+    
+    // 10. 스케줄별 완료 기록 조회
+    suspend fun getScheduleCompletions(scheduleId: String, limit: Int = 10): Result<List<ExerciseCompletionResponse>> {
+        return try {
+            val token = "Bearer ${authManager.getAccessToken()}"
+            val response = exerciseApiService.getScheduleCompletions(scheduleId, limit, token)
+            
+            if (response.isSuccessful && response.body() != null) {
+                Result.success(response.body()!!)
+            } else {
+                Result.failure(Exception("스케줄별 완료 기록 조회 실패: ${response.errorBody()?.string()}"))
             }
         } catch (e: Exception) {
             Result.failure(e)
@@ -504,13 +831,18 @@ class ExerciseRepository(
    }
    ```
 
-2. **운동 이력 조회**:
+2. **운동 스케줄 생성**:
    ```kotlin
    viewModelScope.launch {
-       when (val result = exerciseRepository.getExerciseRecommendationsHistory()) {
+       when (val result = exerciseRepository.createExerciseSchedule(
+           recommendationId = "12345",
+           dayOfWeek = 1, // 월요일
+           timeOfDay = "18:00",
+           durationMinutes = 45
+       )) {
            is Result.Success -> {
-               val recommendations = result.data
-               // RecyclerView 업데이트
+               val schedule = result.data
+               // 스케줄 생성 성공 처리
            }
            is Result.Failure -> {
                // 오류 처리
@@ -519,12 +851,17 @@ class ExerciseRepository(
    }
    ```
 
-3. **운동 완료 표시**:
+3. **운동 완료 기록**:
    ```kotlin
    viewModelScope.launch {
-       when (val result = exerciseRepository.updateExerciseCompletion(recommendationId, true)) {
+       when (val result = exerciseRepository.recordExerciseCompletion(
+           scheduleId = "67890",
+           recommendationId = "12345",
+           satisfactionRating = 4,
+           feedback = "오늘 운동은 정말 효과적이었습니다."
+       )) {
            is Result.Success -> {
-               // 완료 상태 UI 업데이트
+               // 완료 기록 성공 처리
            }
            is Result.Failure -> {
                // 오류 처리
@@ -533,13 +870,13 @@ class ExerciseRepository(
    }
    ```
 
-4. **운동 일정 예약**:
+4. **사용자 스케줄 조회**:
    ```kotlin
    viewModelScope.launch {
-       val isoDateTimeString = "2025-03-25T14:00:00"
-       when (val result = exerciseRepository.scheduleExercise(recommendationId, isoDateTimeString)) {
+       when (val result = exerciseRepository.getUserSchedules()) {
            is Result.Success -> {
-               // 일정 추가 성공 메시지 표시
+               val schedules = result.data
+               // 스케줄 목록 표시
            }
            is Result.Failure -> {
                // 오류 처리
