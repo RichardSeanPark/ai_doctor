@@ -471,134 +471,186 @@ class HealthDAO:
     
     def save_exercise_recommendation(self, recommendation: ExerciseRecommendation) -> bool:
         """
-        운동 추천 정보를 저장합니다.
+        운동 추천 정보 저장
         
         Args:
-            recommendation: 저장할 운동 추천 객체
+            recommendation: ExerciseRecommendation 모델
             
         Returns:
             bool: 저장 성공 여부
         """
         try:
-            # JSON 데이터 변환
-            exercise_plans_json = json.dumps(recommendation.exercise_plans, ensure_ascii=False)
-            special_instructions_json = json.dumps(recommendation.special_instructions, ensure_ascii=False) if recommendation.special_instructions else None
-            
-            # 같은 날짜에 이미 운동 추천이 있는지 확인 (날짜만 비교)
-            date_only = recommendation.timestamp.date()
-            
-            check_query = """
-            SELECT recommendation_id FROM exercise_recommendations
-            WHERE user_id = %s AND DATE(timestamp) = %s
+            sql = """
+            INSERT INTO exercise_recommendations (
+                recommendation_id, user_id, goal, fitness_level, recommended_frequency,
+                exercise_plans, special_instructions, recommendation_summary, timestamp,
+                exercise_location, preferred_exercise_type, available_equipment,
+                time_per_session, experience_level, intensity_preference, exercise_constraints
+            ) VALUES (
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+            )
             """
-            existing_record = self.db.fetch_one(check_query, (recommendation.user_id, date_only))
             
-            if existing_record:
-                # 기존 레코드가 있으면 업데이트
-                logger.info(f"같은 날짜({date_only})에 기존 운동 추천을 발견하여 업데이트합니다. 기존 ID: {existing_record['recommendation_id']}")
-                
-                update_query = """
-                UPDATE exercise_recommendations
-                SET 
-                    goal = %s,
-                    fitness_level = %s,
-                    recommended_frequency = %s,
-                    exercise_plans = %s,
-                    special_instructions = %s,
-                    recommendation_summary = %s,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE recommendation_id = %s
-                """
-                
-                self.db.execute_query(update_query, (
-                    recommendation.goal,
-                    recommendation.fitness_level,
-                    recommendation.recommended_frequency,
-                    exercise_plans_json,
-                    special_instructions_json,
-                    recommendation.recommendation_summary,
-                    existing_record['recommendation_id']
-                ))
-                
-                logger.info(f"운동 추천 정보 업데이트 성공: ID {existing_record['recommendation_id']}")
-                
-                # recommendation 객체의 ID를 기존 ID로 업데이트 (일관성 유지)
-                recommendation.recommendation_id = existing_record['recommendation_id']
-                
-                return True
-            else:
-                # 새 레코드 삽입
-                insert_query = """
-                INSERT INTO exercise_recommendations (
-                    recommendation_id, user_id, goal, fitness_level, recommended_frequency,
-                    exercise_plans, special_instructions, recommendation_summary,
-                    timestamp, created_at, updated_at
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                """
-                
-                self.db.execute_query(insert_query, (
-                    recommendation.recommendation_id,
-                    recommendation.user_id,
-                    recommendation.goal,
-                    recommendation.fitness_level,
-                    recommendation.recommended_frequency,
-                    exercise_plans_json,
-                    special_instructions_json,
-                    recommendation.recommendation_summary,
-                    recommendation.timestamp
-                ))
-                
-                logger.info(f"새 운동 추천 정보 저장 성공: ID {recommendation.recommendation_id}, 날짜: {date_only}")
-                
-                return True
-                
+            # JSON 필드 직렬화
+            exercise_plans_json = json.dumps(recommendation.exercise_plans, ensure_ascii=False)
+            special_instructions_json = json.dumps(recommendation.special_instructions, ensure_ascii=False)
+            available_equipment_json = json.dumps(recommendation.available_equipment, ensure_ascii=False)
+            exercise_constraints_json = json.dumps(recommendation.exercise_constraints, ensure_ascii=False)
+            
+            params = (
+                recommendation.recommendation_id,
+                recommendation.user_id,
+                recommendation.goal,
+                recommendation.fitness_level,
+                recommendation.recommended_frequency,
+                exercise_plans_json,
+                special_instructions_json,
+                recommendation.recommendation_summary,
+                recommendation.timestamp,
+                recommendation.exercise_location,
+                recommendation.preferred_exercise_type,
+                available_equipment_json,
+                recommendation.time_per_session,
+                recommendation.experience_level,
+                recommendation.intensity_preference,
+                exercise_constraints_json
+            )
+            
+            cursor = self.db.cursor()
+            cursor.execute(sql, params)
+            self.db.commit()
+            cursor.close()
+            
+            logger.info(f"[HealthDAO] 운동 추천 정보 저장 성공: {recommendation.recommendation_id}")
+            return True
         except Exception as e:
-            logger.error(f"운동 추천 정보 저장 중 오류 발생: {str(e)}")
+            logger.error(f"[HealthDAO] 운동 추천 정보 저장 중 오류: {str(e)}")
             return False
     
     def get_exercise_recommendation(self, recommendation_id: str) -> Optional[ExerciseRecommendation]:
         """
-        특정 ID의 운동 추천 정보를 조회합니다.
+        특정 운동 추천 정보 조회
         
         Args:
-            recommendation_id: 조회할 운동 추천 ID
+            recommendation_id: 운동 추천 ID
             
         Returns:
-            ExerciseRecommendation: 운동 추천 객체 또는 None
+            Optional[ExerciseRecommendation]: 운동 추천 정보
         """
         try:
-            query = """
-            SELECT * FROM exercise_recommendations
+            sql = """
+            SELECT recommendation_id, user_id, goal, fitness_level, recommended_frequency,
+                   exercise_plans, special_instructions, recommendation_summary, timestamp,
+                   exercise_location, preferred_exercise_type, available_equipment,
+                   time_per_session, experience_level, intensity_preference, exercise_constraints
+            FROM exercise_recommendations
             WHERE recommendation_id = %s
             """
-            result = self.db.fetch_one(query, (recommendation_id,))
+            
+            result = self.db.fetch_one(sql, (recommendation_id,))
             
             if not result:
-                logger.info(f"운동 추천 정보를 찾을 수 없음: ID {recommendation_id}")
                 return None
             
-            # JSON 데이터 파싱
-            exercise_plans = json.loads(result['exercise_plans'])
+            # JSON 필드 파싱
+            exercise_plans = json.loads(result['exercise_plans']) if result['exercise_plans'] else []
             special_instructions = json.loads(result['special_instructions']) if result['special_instructions'] else []
+            available_equipment = json.loads(result['available_equipment']) if result['available_equipment'] else []
+            exercise_constraints = json.loads(result['exercise_constraints']) if result['exercise_constraints'] else []
+            
+            # 운동 완료 여부 확인
+            completed = self.check_exercise_completion(recommendation_id)
             
             # ExerciseRecommendation 객체 생성
             recommendation = ExerciseRecommendation(
                 recommendation_id=result['recommendation_id'],
                 user_id=result['user_id'],
                 goal=result['goal'],
+                exercise_plans=exercise_plans,
                 fitness_level=result['fitness_level'],
                 recommended_frequency=result['recommended_frequency'],
-                exercise_plans=exercise_plans,
                 special_instructions=special_instructions,
                 recommendation_summary=result['recommendation_summary'],
-                timestamp=result['timestamp']
+                timestamp=result['timestamp'],
+                exercise_location=result['exercise_location'],
+                preferred_exercise_type=result['preferred_exercise_type'],
+                available_equipment=available_equipment,
+                time_per_session=result['time_per_session'],
+                experience_level=result['experience_level'],
+                intensity_preference=result['intensity_preference'],
+                exercise_constraints=exercise_constraints,
+                completed=completed
             )
             
+            logger.info(f"[HealthDAO] 운동 추천 정보 조회 성공: {recommendation_id}")
             return recommendation
-            
         except Exception as e:
-            logger.error(f"운동 추천 정보 조회 중 오류 발생: {str(e)}")
+            logger.error(f"[HealthDAO] 운동 추천 정보 조회 중 오류: {str(e)}")
             return None
+            
+    def get_user_exercise_recommendations(self, user_id: str, limit: int = 10) -> List[ExerciseRecommendation]:
+        """
+        사용자 운동 추천 목록 조회
+        
+        Args:
+            user_id: 사용자 ID
+            limit: 조회 개수 제한
+            
+        Returns:
+            List[ExerciseRecommendation]: 운동 추천 목록
+        """
+        try:
+            sql = """
+            SELECT recommendation_id, user_id, goal, fitness_level, recommended_frequency,
+                   exercise_plans, special_instructions, recommendation_summary, timestamp,
+                   exercise_location, preferred_exercise_type, available_equipment,
+                   time_per_session, experience_level, intensity_preference, exercise_constraints
+            FROM exercise_recommendations
+            WHERE user_id = %s
+            ORDER BY timestamp DESC
+            LIMIT %s
+            """
+            
+            results = self.db.fetch_all(sql, (user_id, limit))
+            
+            recommendations = []
+            for result in results:
+                # JSON 필드 파싱
+                exercise_plans = json.loads(result['exercise_plans']) if result['exercise_plans'] else []
+                special_instructions = json.loads(result['special_instructions']) if result['special_instructions'] else []
+                available_equipment = json.loads(result['available_equipment']) if result['available_equipment'] else []
+                exercise_constraints = json.loads(result['exercise_constraints']) if result['exercise_constraints'] else []
+                
+                # 운동 완료 여부 확인
+                completed = self.check_exercise_completion(result['recommendation_id'])
+                
+                # ExerciseRecommendation 객체 생성
+                recommendation = ExerciseRecommendation(
+                    recommendation_id=result['recommendation_id'],
+                    user_id=result['user_id'],
+                    goal=result['goal'],
+                    exercise_plans=exercise_plans,
+                    fitness_level=result['fitness_level'],
+                    recommended_frequency=result['recommended_frequency'],
+                    special_instructions=special_instructions,
+                    recommendation_summary=result['recommendation_summary'],
+                    timestamp=result['timestamp'],
+                    exercise_location=result['exercise_location'],
+                    preferred_exercise_type=result['preferred_exercise_type'],
+                    available_equipment=available_equipment,
+                    time_per_session=result['time_per_session'],
+                    experience_level=result['experience_level'],
+                    intensity_preference=result['intensity_preference'],
+                    exercise_constraints=exercise_constraints,
+                    completed=completed
+                )
+                recommendations.append(recommendation)
+            
+            logger.info(f"[HealthDAO] 사용자 운동 추천 목록 조회 성공: 사용자 {user_id}, {len(recommendations)}개 결과")
+            return recommendations
+        except Exception as e:
+            logger.error(f"[HealthDAO] 사용자 운동 추천 목록 조회 중 오류: {str(e)}")
+            return []
     
     def update_exercise_completion(self, recommendation_id: str, completed: bool) -> bool:
         """운동 완료 상태를 업데이트한다.
@@ -657,54 +709,6 @@ class HealthDAO:
         except Exception as e:
             logger.error(f"운동 시간 예약 중 오류 발생: {str(e)}")
             return False
-    
-    def get_user_exercise_recommendations(self, user_id: str, limit: int = 10) -> List[ExerciseRecommendation]:
-        """사용자의 운동 추천 이력을 조회한다.
-        
-        Args:
-            user_id: 사용자 ID
-            limit: 반환할 최대 결과 수
-            
-        Returns:
-            List[ExerciseRecommendation]: 운동 추천 객체 리스트
-        """
-        try:
-            query = """
-            SELECT * FROM exercise_recommendations
-            WHERE user_id = %s
-            ORDER BY timestamp DESC
-            LIMIT %s
-            """
-            results = self.db.fetch_all(query, (user_id, limit))
-            
-            recommendations = []
-            for result in results:
-                try:
-                    # JSON 문자열을 객체로 변환
-                    exercise_plans = json.loads(result['exercise_plans'])
-                    special_instructions = json.loads(result['special_instructions']) if result['special_instructions'] else []
-                    
-                    # ExerciseRecommendation 객체 생성
-                    recommendation = ExerciseRecommendation(
-                        recommendation_id=result['recommendation_id'],
-                        user_id=result['user_id'],
-                        goal=result['goal'],
-                        fitness_level=result['fitness_level'],
-                        recommended_frequency=result['recommended_frequency'],
-                        exercise_plans=exercise_plans,
-                        special_instructions=special_instructions,
-                        recommendation_summary=result['recommendation_summary'],
-                        timestamp=result['timestamp']
-                    )
-                    recommendations.append(recommendation)
-                except Exception as e:
-                    logger.error(f"운동 추천 객체 생성 중 오류: {str(e)}")
-            
-            logger.info(f"사용자 운동 추천 이력 조회 성공: 사용자 ID {user_id}, {len(recommendations)}개 결과")
-            return recommendations
-        except Exception as e:
-            logger.error(f"사용자 운동 추천 이력 조회 중 오류 발생: {str(e)}")
-            return []
     
     def save_exercise_schedule(self, schedule: ExerciseSchedule) -> bool:
         """
@@ -946,6 +950,33 @@ class HealthDAO:
         except Exception as e:
             logger.error(f"운동 완료 기록 조회 중 오류 발생: {str(e)}")
             return []
+    
+    def check_exercise_completion(self, recommendation_id: str) -> bool:
+        """
+        특정 운동 추천에 대한 완료 기록이 있는지 확인합니다.
+        
+        Args:
+            recommendation_id: 확인할 운동 추천 ID
+            
+        Returns:
+            bool: 완료 기록이 있으면 True, 없으면 False
+        """
+        try:
+            query = """
+            SELECT COUNT(*) as completion_count 
+            FROM exercise_completions
+            WHERE recommendation_id = %s
+            """
+            result = self.db.fetch_one(query, (recommendation_id,))
+            
+            if result and result['completion_count'] > 0:
+                return True
+            
+            return False
+            
+        except Exception as e:
+            logger.error(f"운동 완료 여부 확인 중 오류 발생: {str(e)}")
+            return False
     
     def get_today_schedules_for_notification(self, minutes_threshold: int = 30) -> List[Dict[str, Any]]:
         """

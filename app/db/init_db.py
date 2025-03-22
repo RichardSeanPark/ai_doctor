@@ -106,6 +106,13 @@ def init_database():
         special_instructions JSON,
         recommendation_summary TEXT NOT NULL,
         timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        exercise_location VARCHAR(100),
+        preferred_exercise_type VARCHAR(100),
+        available_equipment JSON,
+        time_per_session INT,
+        experience_level VARCHAR(50),
+        intensity_preference VARCHAR(50),
+        exercise_constraints JSON,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE

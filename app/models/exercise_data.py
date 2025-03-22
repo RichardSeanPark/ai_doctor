@@ -14,6 +14,17 @@ class ExerciseRecommendation(BaseModel):
     special_instructions: Optional[List[str]] = []  # 특별 지시사항
     recommendation_summary: str  # 운동 추천 요약
     timestamp: datetime = Field(default_factory=datetime.now)
+    # 운동 환경 및 선호도 정보
+    exercise_location: Optional[str] = None  # 운동 장소 (집, 헬스장, 야외 등)
+    preferred_exercise_type: Optional[str] = None  # 선호 운동 유형 (유산소, 무산소, 근력 등)
+    available_equipment: Optional[List[str]] = []  # 사용 가능한 장비 목록
+    time_per_session: Optional[int] = None  # 세션당 운동 시간(분)
+    experience_level: Optional[str] = None  # 운동 경험 수준
+    intensity_preference: Optional[str] = None  # 선호하는 운동 강도
+    exercise_constraints: Optional[List[str]] = []  # 운동 제약사항
+    # 하위 호환성을 위한 추가 속성
+    completed: bool = False  # 운동 완료 여부 (실제로는 운동 완료 테이블에서 관리)
+    scheduled_time: Optional[datetime] = None  # 예약 시간 (실제로는 운동 스케줄 테이블에서 관리)
 
 class ExerciseSchedule(BaseModel):
     """운동 스케줄 모델"""

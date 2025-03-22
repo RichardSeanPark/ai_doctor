@@ -61,7 +61,14 @@ JWT 토큰은 로그인 API(`/api/v1/auth/login`)를 통해 획득할 수 있습
 {
   "goal": "운동 목적 텍스트 (필수)",
   "fitness_level": "사용자 피트니스 레벨 (선택, '초보자'/'중급자'/'고급자')",
-  "medical_conditions": ["기존 질환 리스트 (선택)"]
+  "medical_conditions": ["기존 질환 리스트 (선택)"],
+  "exercise_location": "운동 장소 (선택, '집'/'헬스장'/'야외'/'공원' 등)",
+  "preferred_exercise_type": "선호 운동 유형 (선택, '유산소'/'무산소'/'근력 운동'/'유연성' 등)",
+  "available_equipment": ["사용 가능한 장비 리스트 (선택)"],
+  "time_per_session": 45,
+  "experience_level": "운동 경험 수준 (선택, '초보자'/'중급자'/'전문가')",
+  "intensity_preference": "선호하는 운동 강도 (선택, '저강도'/'중강도'/'고강도')",
+  "exercise_constraints": ["운동 제약사항 리스트 (선택)"]
 }
 ```
 
@@ -73,6 +80,13 @@ JWT 토큰은 로그인 API(`/api/v1/auth/login`)를 통해 획득할 수 있습
 
 - **fitness_level** (String): 사용자의 현재 피트니스 레벨을 지정합니다. 값이 없을 경우 서버에서 자동으로 판단합니다.
 - **medical_conditions** (String[]): 사용자의 기존 질환 리스트입니다. 값이 없을 경우 서버에서 사용자 프로필에서 자동으로 가져옵니다.
+- **exercise_location** (String): 운동을 수행할 장소를 지정합니다. (예: 집, 헬스장, 야외 등)
+- **preferred_exercise_type** (String): 선호하는 운동 유형을 지정합니다. (예: 유산소, 무산소, 근력 운동 등)
+- **available_equipment** (String[]): 사용 가능한 운동 장비 리스트입니다. (예: 덤벨, 러닝머신, 요가 매트 등)
+- **time_per_session** (Integer): 1회 운동 세션에 할애할 수 있는 시간(분)입니다.
+- **experience_level** (String): 사용자의 운동 경험 수준을 지정합니다. (예: 초보자, 중급자, 전문가)
+- **intensity_preference** (String): 선호하는 운동 강도를 지정합니다. (예: 저강도, 중강도, 고강도)
+- **exercise_constraints** (String[]): 운동 시 고려해야 할 제약사항 리스트입니다. (예: 관절 통증, 임신, 부상 등)
 
 ## 응답 구조
 
@@ -96,6 +110,13 @@ JWT 토큰은 로그인 API(`/api/v1/auth/login`)를 통해 획득할 수 있습
   "special_instructions": ["특별 지시사항1", "특별 지시사항2", ...],
   "recommendation_summary": "전체 운동 계획 요약",
   "timestamp": "생성 시간 (ISO 8601 형식)",
+  "exercise_location": "운동 장소",
+  "preferred_exercise_type": "선호 운동 유형",
+  "available_equipment": ["사용 가능한 장비1", "사용 가능한 장비2", ...],
+  "time_per_session": 45,
+  "experience_level": "운동 경험 수준",
+  "intensity_preference": "선호하는 운동 강도",
+  "exercise_constraints": ["운동 제약사항1", "운동 제약사항2", ...],
   "completed": false,
   "scheduled_time": null
 }
@@ -140,6 +161,13 @@ JWT 토큰은 로그인 API(`/api/v1/auth/login`)를 통해 획득할 수 있습
     "special_instructions": ["특별 지시사항1", "특별 지시사항2", ...],
     "recommendation_summary": "전체 운동 계획 요약",
     "timestamp": "생성 시간 (ISO 8601 형식)",
+    "exercise_location": "운동 장소",
+    "preferred_exercise_type": "선호 운동 유형",
+    "available_equipment": ["사용 가능한 장비1", "사용 가능한 장비2", ...],
+    "time_per_session": 45,
+    "experience_level": "운동 경험 수준",
+    "intensity_preference": "선호하는 운동 강도",
+    "exercise_constraints": ["운동 제약사항1", "운동 제약사항2", ...],
     "completed": false,
     "scheduled_time": null
   },
@@ -184,6 +212,13 @@ JWT 토큰은 로그인 API(`/api/v1/auth/login`)를 통해 획득할 수 있습
   "special_instructions": ["특별 지시사항1", "특별 지시사항2", ...],
   "recommendation_summary": "전체 운동 계획 요약",
   "timestamp": "생성 시간 (ISO 8601 형식)",
+  "exercise_location": "운동 장소",
+  "preferred_exercise_type": "선호 운동 유형",
+  "available_equipment": ["사용 가능한 장비1", "사용 가능한 장비2", ...],
+  "time_per_session": 45,
+  "experience_level": "운동 경험 수준",
+  "intensity_preference": "선호하는 운동 강도",
+  "exercise_constraints": ["운동 제약사항1", "운동 제약사항2", ...],
   "completed": false,
   "scheduled_time": null
 }
@@ -534,7 +569,14 @@ interface ExerciseApiService {
 data class ExerciseRecommendationRequest(
     val goal: String,
     val fitness_level: String? = null,
-    val medical_conditions: List<String>? = null
+    val medical_conditions: List<String>? = null,
+    val exercise_location: String? = null,
+    val preferred_exercise_type: String? = null,
+    val available_equipment: List<String>? = null,
+    val time_per_session: Int? = null,
+    val experience_level: String? = null,
+    val intensity_preference: String? = null,
+    val exercise_constraints: List<String>? = null
 )
 
 data class ExerciseScheduleCreateRequest(
@@ -564,6 +606,13 @@ data class ExerciseRecommendationResponse(
     val special_instructions: List<String>,
     val recommendation_summary: String,
     val timestamp: String,
+    val exercise_location: String?,
+    val preferred_exercise_type: String?,
+    val available_equipment: List<String>?,
+    val time_per_session: Int?,
+    val experience_level: String?,
+    val intensity_preference: String?,
+    val exercise_constraints: List<String>?,
     val completed: Boolean,
     val scheduled_time: String?
 )

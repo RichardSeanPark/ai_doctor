@@ -28,20 +28,36 @@ class ExerciseRecommendationRequest(BaseModel):
     # 필수적인 정보가 아닌 경우 선택적으로 제공
     fitness_level: Optional[str] = None
     medical_conditions: Optional[List[str]] = None
+    # 추가 세부 정보
+    exercise_location: Optional[str] = Field(None, description="운동 장소 (예: 집, 헬스장, 야외, 공원 등)")
+    preferred_exercise_type: Optional[str] = Field(None, description="선호 운동 유형 (예: 유산소, 무산소, 근력 운동, 유연성 등)")
+    available_equipment: Optional[List[str]] = Field(None, description="사용 가능한 장비 목록 (예: 덤벨, 러닝머신, 요가 매트 등)")
+    time_per_session: Optional[int] = Field(None, ge=5, le=180, description="세션당 가능한 운동 시간(분)")
+    experience_level: Optional[str] = Field(None, description="운동 경험 수준 (예: 초보자, 중급자, 전문가)")
+    intensity_preference: Optional[str] = Field(None, description="선호하는 운동 강도 (예: 저강도, 중강도, 고강도)")
+    exercise_constraints: Optional[List[str]] = Field(None, description="운동 제약사항 (예: 관절 통증, 임신, 부상 등)")
 
 # 응답 모델
 class ExerciseRecommendationResponse(BaseModel):
     recommendation_id: str
     user_id: str
     goal: str
-    fitness_level: str
-    recommended_frequency: str
-    exercise_plans: List[Dict[str, Any]]
-    special_instructions: List[str]
+    fitness_level: Optional[str] = None
+    recommended_frequency: Optional[str] = None
+    exercise_plans: List[Dict[str, Any]] = []
+    special_instructions: Optional[List[str]] = []
     recommendation_summary: str
     timestamp: datetime
     completed: bool = False
     scheduled_time: Optional[datetime] = None
+    # 운동 환경 및 선호도 정보
+    exercise_location: Optional[str] = None
+    preferred_exercise_type: Optional[str] = None
+    available_equipment: Optional[List[str]] = []
+    time_per_session: Optional[int] = None
+    experience_level: Optional[str] = None
+    intensity_preference: Optional[str] = None
+    exercise_constraints: Optional[List[str]] = []
 
 # 운동 스케줄 요청 모델
 class ExerciseScheduleCreateRequest(BaseModel):
@@ -92,6 +108,7 @@ async def get_exercise_recommendation(
     """
     사용자의 운동 목적에 맞는 운동 계획을 추천합니다.
     사용자 ID를 통해 자동으로 사용자 정보(나이, 성별, 체중, 키 등)를 조회합니다.
+    추가 세부 정보(운동 장소, 선호 운동 유형, 사용 가능한 장비 등)를 활용하여 보다 맞춤화된 운동 계획을 제공합니다.
     """
     try:
         # 토큰에서 사용자 ID 추출
@@ -111,6 +128,35 @@ async def get_exercise_recommendation(
         if request.medical_conditions:
             user_profile["medical_conditions"] = request.medical_conditions
             logger.info(f"[EXERCISE_API] 요청에서 의학적 조건 추가: {len(request.medical_conditions)}개 항목")
+        
+        # 추가 세부 정보 포함
+        if request.exercise_location:
+            user_profile["exercise_location"] = request.exercise_location
+            logger.info(f"[EXERCISE_API] 운동 장소 정보 추가: {request.exercise_location}")
+        
+        if request.preferred_exercise_type:
+            user_profile["preferred_exercise_type"] = request.preferred_exercise_type
+            logger.info(f"[EXERCISE_API] 선호 운동 유형 추가: {request.preferred_exercise_type}")
+        
+        if request.available_equipment:
+            user_profile["available_equipment"] = request.available_equipment
+            logger.info(f"[EXERCISE_API] 사용 가능한 장비 추가: {', '.join(request.available_equipment)}")
+        
+        if request.time_per_session:
+            user_profile["time_per_session"] = request.time_per_session
+            logger.info(f"[EXERCISE_API] 세션당 운동 시간 추가: {request.time_per_session}분")
+        
+        if request.experience_level:
+            user_profile["experience_level"] = request.experience_level
+            logger.info(f"[EXERCISE_API] 운동 경험 수준 추가: {request.experience_level}")
+        
+        if request.intensity_preference:
+            user_profile["intensity_preference"] = request.intensity_preference
+            logger.info(f"[EXERCISE_API] 선호 운동 강도 추가: {request.intensity_preference}")
+        
+        if request.exercise_constraints:
+            user_profile["exercise_constraints"] = request.exercise_constraints
+            logger.info(f"[EXERCISE_API] 운동 제약사항 추가: {', '.join(request.exercise_constraints)}")
         
         # UserState 객체 생성 - 사용자 데이터는 노드에서 자동으로 조회됨
         state = UserState(
@@ -183,7 +229,14 @@ async def get_exercise_recommendation(
             recommendation_summary=recommendation.recommendation_summary,
             timestamp=recommendation.timestamp,
             completed=recommendation.completed,
-            scheduled_time=recommendation.scheduled_time
+            scheduled_time=recommendation.scheduled_time,
+            exercise_location=recommendation.exercise_location,
+            preferred_exercise_type=recommendation.preferred_exercise_type,
+            available_equipment=recommendation.available_equipment,
+            time_per_session=recommendation.time_per_session,
+            experience_level=recommendation.experience_level,
+            intensity_preference=recommendation.intensity_preference,
+            exercise_constraints=recommendation.exercise_constraints
         )
     
     except Exception as e:
@@ -221,7 +274,14 @@ async def get_user_exercise_recommendations(
                 recommendation_summary=rec.recommendation_summary,
                 timestamp=rec.timestamp,
                 completed=rec.completed,
-                scheduled_time=rec.scheduled_time
+                scheduled_time=rec.scheduled_time,
+                exercise_location=rec.exercise_location,
+                preferred_exercise_type=rec.preferred_exercise_type,
+                available_equipment=rec.available_equipment,
+                time_per_session=rec.time_per_session,
+                experience_level=rec.experience_level,
+                intensity_preference=rec.intensity_preference,
+                exercise_constraints=rec.exercise_constraints
             ))
         
         return response
@@ -268,7 +328,14 @@ async def get_specific_exercise_recommendation(
             recommendation_summary=recommendation.recommendation_summary,
             timestamp=recommendation.timestamp,
             completed=recommendation.completed,
-            scheduled_time=recommendation.scheduled_time
+            scheduled_time=recommendation.scheduled_time,
+            exercise_location=recommendation.exercise_location,
+            preferred_exercise_type=recommendation.preferred_exercise_type,
+            available_equipment=recommendation.available_equipment,
+            time_per_session=recommendation.time_per_session,
+            experience_level=recommendation.experience_level,
+            intensity_preference=recommendation.intensity_preference,
+            exercise_constraints=recommendation.exercise_constraints
         )
     
     except HTTPException:
