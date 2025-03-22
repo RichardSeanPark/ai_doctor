@@ -88,6 +88,24 @@ async def recommend_exercise_plan(state: Dict[str, Any]) -> Dict[str, Any]:
         height = user_profile.get("height", "알 수 없음")
         weight = user_profile.get("weight", "알 수 없음")
         
+        # 추가된 세부 정보 추출
+        exercise_location = user_profile.get("exercise_location", "정보 없음")
+        preferred_exercise_type = user_profile.get("preferred_exercise_type", "정보 없음")
+        available_equipment = user_profile.get("available_equipment", [])
+        time_per_session = user_profile.get("time_per_session", "정보 없음")
+        experience_level = user_profile.get("experience_level", user_profile.get("fitness_level", "정보 없음"))
+        intensity_preference = user_profile.get("intensity_preference", "정보 없음")
+        exercise_constraints = user_profile.get("exercise_constraints", [])
+        
+        # 추가 정보 로깅
+        logger.info(f"[EXERCISE_NODE] 운동 장소: {exercise_location}")
+        logger.info(f"[EXERCISE_NODE] 선호 운동 유형: {preferred_exercise_type}")
+        logger.info(f"[EXERCISE_NODE] 사용 가능한 장비: {', '.join(available_equipment) if available_equipment else '없음'}")
+        logger.info(f"[EXERCISE_NODE] 세션당 운동 시간: {time_per_session}분")
+        logger.info(f"[EXERCISE_NODE] 운동 경험/피트니스 레벨: {experience_level}")
+        logger.info(f"[EXERCISE_NODE] 선호 운동 강도: {intensity_preference}")
+        logger.info(f"[EXERCISE_NODE] 운동 제약사항: {', '.join(exercise_constraints) if exercise_constraints else '없음'}")
+        
         logger.info(f"[EXERCISE_NODE] 최종 사용자 정보 - 나이: {age}, 성별: {gender}, 키: {height}, 체중: {weight}")
         
         # 건강 상태 정보 추출
@@ -99,18 +117,34 @@ async def recommend_exercise_plan(state: Dict[str, Any]) -> Dict[str, Any]:
         
         logger.info(f"[EXERCISE_NODE] 운동 전문가 AI 호출 준비")
         
+        # 장비 정보 문자열
+        equipment_str = "없음" if not available_equipment else ", ".join(available_equipment)
+        
+        # 제약사항 문자열
+        constraints_str = "없음" if not exercise_constraints else ", ".join(exercise_constraints)
+        
         # 프롬프트 구성
         prompt = f"""
-        당신은 세계적인 운동 전문가입니다. 다음 사용자에게 운동 목적에 맞는 운동 계획을 제안해주세요:
+        당신은 세계적인 운동 전문가로서 개인의 상황과 환경에 맞는 최적화된 운동 계획을 제공합니다. 다음 사용자에게 상세한 정보를 기반으로 맞춤형 운동 계획을 제안해주세요:
         
-        사용자 정보:
+        ### 사용자 기본 정보:
         - 나이: {age}
         - 성별: {gender}
         - 키: {height}
         - 체중: {weight}
         - 건강 상태: {conditions_str}
         
-        운동 목적: {exercise_goal}
+        ### 운동 환경 및 선호도:
+        - 운동 장소: {exercise_location}
+        - 선호하는 운동 유형: {preferred_exercise_type}
+        - 사용 가능한 장비: {equipment_str}
+        - 세션당 가능한 운동 시간: {time_per_session}분
+        - 운동 경험 수준: {experience_level}
+        - 선호하는 운동 강도: {intensity_preference}
+        - 운동 제약사항/주의사항: {constraints_str}
+        
+        ### 운동 목적:
+        {exercise_goal}
         
         다음 형식에 맞게 정확히 JSON 문자열만 응답해주세요. 설명이나 다른 텍스트는 포함하지 마세요:
         
@@ -120,15 +154,22 @@ async def recommend_exercise_plan(state: Dict[str, Any]) -> Dict[str, Any]:
             "exercise_plans": [
                 {{
                     "name": "운동명 (예: 조깅, 스쿼트 등)",
-                    "description": "세부 운동 방법",
+                    "description": "해당 장소와 장비를 고려한 세부 운동 방법",
                     "duration": "권장 시간 (예: 30분)",
                     "benefits": "효과"
                 }},
-                // 2-3개 정도의 추천 운동
+                // 3-5개 정도의 추천 운동
             ],
             "special_instructions": ["주의사항1", "주의사항2"],
             "recommendation_summary": "전체적인 운동 계획 요약"
         }}
+        
+        특별한 고려사항:
+        1. 사용자가 제공한 운동 장소(집, 헬스장, 야외 등)에 적합한 운동만 추천하세요.
+        2. 사용 가능한 장비가 제한적이라면 그에 맞는 운동을 제안하세요.
+        3. 사용자의 운동 경험 수준에 맞는 난이도로 운동을 구성하세요.
+        4. 건강 상태나 제약사항을 고려하여 안전한 운동을 권장하세요.
+        5. 선호하는 운동 유형과 강도를 반영한 계획을 제시하세요.
         """
         
         logger.info(f"[EXERCISE_NODE] Gemini API 호출 시작")
@@ -204,7 +245,15 @@ async def recommend_exercise_plan(state: Dict[str, Any]) -> Dict[str, Any]:
             fitness_level=exercise_data.get("fitness_level", "초보자"),
             recommended_frequency=exercise_data.get("recommended_frequency", "주 3회"),
             special_instructions=exercise_data.get("special_instructions", []),
-            recommendation_summary=exercise_data.get("recommendation_summary", "")
+            recommendation_summary=exercise_data.get("recommendation_summary", ""),
+            # 운동 환경 및 선호도 정보 추가
+            exercise_location=exercise_location,
+            preferred_exercise_type=preferred_exercise_type,
+            available_equipment=available_equipment,
+            time_per_session=time_per_session if time_per_session != "정보 없음" else None,
+            experience_level=experience_level if experience_level != "정보 없음" else None,
+            intensity_preference=intensity_preference if intensity_preference != "정보 없음" else None,
+            exercise_constraints=exercise_constraints
         )
         
         # 알림 메시지 생성

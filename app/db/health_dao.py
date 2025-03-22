@@ -480,6 +480,8 @@ class HealthDAO:
             bool: 저장 성공 여부
         """
         try:
+            logger.info(f"[HealthDAO] 운동 추천 정보 저장 시작: {recommendation.recommendation_id}")
+            
             sql = """
             INSERT INTO exercise_recommendations (
                 recommendation_id, user_id, goal, fitness_level, recommended_frequency,
@@ -496,6 +498,8 @@ class HealthDAO:
             special_instructions_json = json.dumps(recommendation.special_instructions, ensure_ascii=False)
             available_equipment_json = json.dumps(recommendation.available_equipment, ensure_ascii=False)
             exercise_constraints_json = json.dumps(recommendation.exercise_constraints, ensure_ascii=False)
+            
+            logger.debug(f"[HealthDAO] JSON 필드 직렬화 완료")
             
             params = (
                 recommendation.recommendation_id,
@@ -516,15 +520,16 @@ class HealthDAO:
                 exercise_constraints_json
             )
             
-            cursor = self.db.cursor()
-            cursor.execute(sql, params)
-            self.db.commit()
-            cursor.close()
+            logger.debug(f"[HealthDAO] 파라미터 준비 완료: {len(params)} 개")
             
-            logger.info(f"[HealthDAO] 운동 추천 정보 저장 성공: {recommendation.recommendation_id}")
+            # Database 객체에서 직접 execute_query 메서드 사용
+            affected_rows = self.db.execute_query(sql, params)
+            
+            logger.info(f"[HealthDAO] 운동 추천 정보 저장 성공: {recommendation.recommendation_id}, 영향 받은 행: {affected_rows}")
             return True
         except Exception as e:
             logger.error(f"[HealthDAO] 운동 추천 정보 저장 중 오류: {str(e)}")
+            logger.exception("[HealthDAO] 상세 오류 정보:")
             return False
     
     def get_exercise_recommendation(self, recommendation_id: str) -> Optional[ExerciseRecommendation]:
