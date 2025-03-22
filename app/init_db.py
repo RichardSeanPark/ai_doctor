@@ -12,19 +12,41 @@ def init_database():
     """데이터베이스 테이블 초기화"""
     db = Database()
     
-    # 사용자 테이블 생성
+    # 사용자 테이블 생성 (소셜 로그인 지원)
     create_users_table = """
     CREATE TABLE IF NOT EXISTS users (
         user_id VARCHAR(36) PRIMARY KEY,
         username VARCHAR(50) UNIQUE NOT NULL,
-        password_hash TEXT NOT NULL,
+        password_hash TEXT NULL,  /* 비밀번호 해시를 NULL 허용으로 변경 (소셜 로그인 사용자) */
         name VARCHAR(100),
         birth_date DATE,
         gender VARCHAR(10),
         email VARCHAR(100) UNIQUE,
         phone VARCHAR(20),
+        profile_image_url TEXT,  /* 프로필 이미지 URL 추가 */
+        is_social_account BOOLEAN DEFAULT FALSE,  /* 소셜 계정 여부 추가 */
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    """
+    
+    # 소셜 계정 테이블 생성
+    create_social_accounts_table = """
+    CREATE TABLE IF NOT EXISTS social_accounts (
+        social_id VARCHAR(100) NOT NULL,
+        user_id VARCHAR(36) NOT NULL,
+        provider VARCHAR(20) NOT NULL,  /* 'google', 'kakao' 등 */
+        social_email VARCHAR(100),
+        social_name VARCHAR(100),
+        access_token TEXT,
+        refresh_token TEXT,
+        token_expires_at TIMESTAMP NULL,
+        profile_data JSON,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (social_id, provider),
+        UNIQUE KEY unique_user_provider (user_id, provider),
+        FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     """
     
@@ -118,6 +140,9 @@ def init_database():
         # 테이블 생성 실행
         db.execute_query(create_users_table)
         logger.info("사용자 테이블 생성 완료")
+        
+        db.execute_query(create_social_accounts_table)
+        logger.info("소셜 계정 테이블 생성 완료")
         
         db.execute_query(create_sessions_table)
         logger.info("세션 테이블 생성 완료")

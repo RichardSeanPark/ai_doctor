@@ -12,19 +12,17 @@ def init_database():
     """데이터베이스 테이블 초기화"""
     db = Database()
     
-    # 사용자 테이블 생성
-    create_users_table = """
-    CREATE TABLE IF NOT EXISTS users (
+    # 소셜 계정 테이블 생성 (주 테이블)
+    create_social_accounts_table = """
+    CREATE TABLE IF NOT EXISTS social_accounts (
         user_id VARCHAR(36) PRIMARY KEY,
-        username VARCHAR(50) UNIQUE NOT NULL,
-        password_hash TEXT NOT NULL,
-        name VARCHAR(100),
+        social_id VARCHAR(255) NOT NULL,
+        provider VARCHAR(20) NOT NULL,
         birth_date DATE,
         gender VARCHAR(10),
-        email VARCHAR(100) UNIQUE,
-        phone VARCHAR(20),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY uk_social_account (social_id, provider)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     """
     
@@ -35,7 +33,7 @@ def init_database():
         user_id VARCHAR(36) NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         expires_at TIMESTAMP NOT NULL,
-        FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+        FOREIGN KEY (user_id) REFERENCES social_accounts(user_id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     """
     
@@ -57,7 +55,7 @@ def init_database():
         steps INT,
         bmi FLOAT,
         gemini_response TEXT,
-        FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+        FOREIGN KEY (user_id) REFERENCES social_accounts(user_id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     """
     
@@ -70,7 +68,7 @@ def init_database():
         description VARCHAR(255) NOT NULL,
         severity VARCHAR(20),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+        FOREIGN KEY (user_id) REFERENCES social_accounts(user_id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     """
     
@@ -89,12 +87,12 @@ def init_database():
         advice_text TEXT NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES social_accounts(user_id) ON DELETE CASCADE,
         UNIQUE KEY unique_user_meal (user_id, meal_date, meal_type)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     """
     
-    # exercise_recommendations 테이블에서 completed와 scheduled_time 필드 제거
+    # exercise_recommendations 테이블
     create_exercise_recommendations_table = """
     CREATE TABLE IF NOT EXISTS exercise_recommendations (
         recommendation_id VARCHAR(36) PRIMARY KEY,
@@ -115,7 +113,7 @@ def init_database():
         exercise_constraints JSON,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+        FOREIGN KEY (user_id) REFERENCES social_accounts(user_id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     """
     
@@ -134,7 +132,7 @@ def init_database():
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         FOREIGN KEY (recommendation_id) REFERENCES exercise_recommendations(recommendation_id) ON DELETE CASCADE,
-        FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES social_accounts(user_id) ON DELETE CASCADE,
         UNIQUE KEY uk_user_schedule (user_id, day_of_week, time_of_day)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     """
@@ -152,14 +150,14 @@ def init_database():
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (schedule_id) REFERENCES exercise_schedules(schedule_id) ON DELETE CASCADE,
         FOREIGN KEY (recommendation_id) REFERENCES exercise_recommendations(recommendation_id) ON DELETE CASCADE,
-        FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+        FOREIGN KEY (user_id) REFERENCES social_accounts(user_id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     """
     
     try:
         # 테이블 생성 실행
-        db.execute_query(create_users_table)
-        logger.info("사용자 테이블 생성 완료")
+        db.execute_query(create_social_accounts_table)
+        logger.info("소셜 계정 테이블 생성 완료")
         
         db.execute_query(create_sessions_table)
         logger.info("세션 테이블 생성 완료")

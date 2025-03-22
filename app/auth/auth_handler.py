@@ -22,8 +22,6 @@ settings = get_settings()
 class UserInfo(BaseModel):
     """사용자 정보 모델"""
     user_id: str
-    username: str
-    email: Optional[str] = None
     role: str = "user"
 
 def create_access_token(user_data: Dict) -> str:
@@ -32,14 +30,9 @@ def create_access_token(user_data: Dict) -> str:
     expire = datetime.utcnow() + timedelta(seconds=settings.JWT_EXPIRATION)
     payload = {
         "sub": user_data["user_id"],
-        "username": user_data["username"],
         "role": user_data.get("role", "user"),
         "exp": expire.timestamp()
     }
-    
-    # 이메일 추가 (선택)
-    if "email" in user_data:
-        payload["email"] = user_data["email"]
     
     # JWT 토큰 생성
     token = jwt.encode(
@@ -89,13 +82,8 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> Dict[str, Any
         # 사용자 정보를 사전 형태로 반환
         user_info = {
             "user_id": payload["sub"],
-            "username": payload["username"],
             "role": payload.get("role", "user")
         }
-        
-        # 이메일 추가 (선택)
-        if "email" in payload:
-            user_info["email"] = payload["email"]
         
         return user_info
     except Exception:

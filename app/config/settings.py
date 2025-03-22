@@ -30,6 +30,29 @@ class Settings(BaseSettings):
         description="Gemini 모델명"
     )
     
+    # OAuth 소셜 로그인 설정 - 안드로이드 앱용
+    # Google OAuth 설정
+    GOOGLE_CLIENT_ID: str = Field(
+        default=os.getenv("GOOGLE_CLIENT_ID", ""), 
+        description="Google OAuth 클라이언트 ID"
+    )
+    
+    # Kakao OAuth 설정
+    KAKAO_CLIENT_ID: str = Field(
+        default=os.getenv("KAKAO_CLIENT_ID", ""), 
+        description="Kakao OAuth 클라이언트 ID"
+    )
+    
+    # 서버측 ID 검증용 (토큰 검증 시 사용, 선택적)
+    GOOGLE_CLIENT_SECRET: str = Field(
+        default=os.getenv("GOOGLE_CLIENT_SECRET", ""), 
+        description="Google OAuth 서버측 검증용 시크릿 (선택적)"
+    )
+    KAKAO_CLIENT_SECRET: str = Field(
+        default=os.getenv("KAKAO_CLIENT_SECRET", ""), 
+        description="Kakao OAuth 서버측 검증용 시크릿 (선택적)"
+    )
+    
     # 의료 데이터 관련 설정
     MAX_HEALTH_HISTORY_DAYS: int = Field(
         default=int(os.getenv("MAX_HEALTH_HISTORY_DAYS", 365)), 
