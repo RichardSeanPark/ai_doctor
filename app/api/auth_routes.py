@@ -158,21 +158,21 @@ async def update_health_metrics(height: Optional[float] = None, weight: Optional
         "건강 지표가 성공적으로 업데이트되었습니다."
     )
 
-# 사용자 프로필 업데이트 엔드포인트 (생년월일, 키)
+# 사용자 프로필 업데이트 엔드포인트 (생년월일, 성별)
 @router.post("/profile/update", response_model=ApiResponse)
-async def update_user_profile(birth_date: Optional[str] = None, height: Optional[float] = None, current_user=Depends(get_current_user)):
+async def update_user_profile(birth_date: Optional[str] = None, gender: Optional[str] = None, current_user=Depends(get_current_user)):
     """
-    사용자의 생년월일과 키를 업데이트합니다.
-    생년월일은 social_accounts 테이블에, 키는 health_metrics 테이블에 저장됩니다.
+    사용자의 생년월일과 성별을 업데이트합니다.
+    생년월일과 성별 모두 social_accounts 테이블에 저장됩니다.
     """
     async def _update_user_profile():
         user_id = current_user["user_id"]
         updated_fields = {}
         
-        if birth_date is None and height is None:
+        if birth_date is None and gender is None:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="생년월일 또는 키 중 최소한 하나는 제공해야 합니다."
+                detail="생년월일 또는 성별 중 최소한 하나는 제공해야 합니다."
             )
             
         # 1. 생년월일 업데이트 (제공된 경우)
@@ -195,33 +195,29 @@ async def update_user_profile(birth_date: Optional[str] = None, height: Optional
                     detail="잘못된 날짜 형식입니다. YYYY-MM-DD 형식으로 입력해주세요."
                 )
         
-        # 2. 키 업데이트 (제공된 경우)
-        metrics_id = None
-        if height is not None:
-            # 키 범위 검증 (예: 50cm ~ 250cm)
-            if height < 50 or height > 250:
+        # 2. 성별 업데이트 (제공된 경우)
+        if gender is not None:
+            # 성별 값 검증 (male 또는 female만 허용)
+            if gender not in ["male", "female"]:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="유효하지 않은 키입니다. 50cm에서 250cm 사이의 값을 입력해주세요."
+                    detail="유효하지 않은 성별입니다. 'male' 또는 'female'로 입력해주세요."
                 )
                 
-            # health_metrics 테이블에 키 업데이트
-            metrics_id = user_dao.update_health_metrics(user_id=user_id, height=height)
+            # social_accounts 테이블에 성별 업데이트
+            gender_updated = user_dao.update_user(user_id, gender=gender)
             
-            if metrics_id:
-                updated_fields["height"] = height
-                logger.info(f"사용자 {user_id}의 키가 업데이트되었습니다: {height}cm")
+            if gender_updated:
+                updated_fields["gender"] = gender
+                logger.info(f"사용자 {user_id}의 성별이 업데이트되었습니다: {gender}")
             else:
-                logger.warning(f"사용자 {user_id}의 키 업데이트 실패")
+                logger.warning(f"사용자 {user_id}의 성별 업데이트 실패")
         
         # 응답 데이터 구성
         response_data = {
             "user_id": user_id,
             "updated_fields": updated_fields
         }
-        
-        if metrics_id:
-            response_data["metrics_id"] = metrics_id
             
         if not updated_fields:
             raise HTTPException(
