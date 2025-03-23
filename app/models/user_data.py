@@ -6,45 +6,19 @@ from pydantic import BaseModel, Field
 from typing import Dict, Any, Optional, List, Literal
 from datetime import datetime
 
-class UserCreate(BaseModel):
-    """사용자 생성 모델"""
-    username: str
-    password: str
-    email: Optional[str] = None
-    
-    class Config:
-        schema_extra = {
-            "example": {
-                "username": "user123",
-                "password": "securepassword",
-                "email": "user@example.com"
-            }
-        }
-
-class UserLogin(BaseModel):
-    """사용자 로그인 모델"""
-    username: str
-    password: str
-    
-    class Config:
-        schema_extra = {
-            "example": {
-                "username": "user123",
-                "password": "securepassword"
-            }
-        }
-
 class SocialLoginRequest(BaseModel):
     """
-    안드로이드 앱에서 소셜 로그인 요청 모델 (카카오용)
+    안드로이드 앱에서 소셜 로그인 요청 모델
     앱에서 이미 소셜 인증이 완료된 후 서버로 전송되는 정보
     """
-    social_id: str  # 카카오 ID
+    social_id: str  # 소셜 ID (카카오 ID 또는 구글 ID)
+    provider: str = "kakao"  # 제공자 (kakao 또는 google)
     
     class Config:
         schema_extra = {
             "example": {
-                "social_id": "12345678"
+                "social_id": "12345678",
+                "provider": "kakao"
             }
         }
 

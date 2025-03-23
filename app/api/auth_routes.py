@@ -69,22 +69,26 @@ async def get_user_profile(current_user=Depends(get_current_user)):
         "사용자 프로필을 성공적으로 조회했습니다."
     )
 
-# 카카오 소셜 로그인 엔드포인트
+# 소셜 로그인 엔드포인트
 @router.post("/social/login", response_model=ApiResponse)
-async def kakao_login(login_request: SocialLoginRequest):
+async def social_login(login_request: SocialLoginRequest):
     """
-    카카오 ID를 이용한 소셜 로그인/회원가입 처리
+    소셜 로그인/회원가입 처리
     
-    카카오 ID만 사용하여 소셜 로그인을 처리합니다.
+    소셜 ID와 provider(kakao 또는 google)를 사용하여 소셜 로그인을 처리합니다.
     """
-    async def _process_kakao_login():
+    async def _process_social_login():
         social_id = login_request.social_id
+        provider = login_request.provider
         
         if not social_id:
-            raise HTTPException(status_code=400, detail="카카오 ID가 제공되지 않았습니다.")
+            raise HTTPException(status_code=400, detail="소셜 ID가 제공되지 않았습니다.")
+        
+        if provider not in ["kakao", "google"]:
+            raise HTTPException(status_code=400, detail="지원하지 않는 provider입니다. kakao 또는 google만 지원합니다.")
         
         # 기존 소셜 계정 확인
-        user = user_dao.get_social_account(social_id, "kakao")
+        user = user_dao.get_social_account(social_id, provider)
         
         user_id = None
         is_new_user = False
@@ -95,7 +99,7 @@ async def kakao_login(login_request: SocialLoginRequest):
         else:
             # 새 사용자 생성
             is_new_user = True
-            user_id = user_dao.create_user(social_id=social_id, provider="kakao")
+            user_id = user_dao.create_user(social_id=social_id, provider=provider)
         
         # JWT 토큰 생성
         token = create_access_token({
@@ -110,9 +114,9 @@ async def kakao_login(login_request: SocialLoginRequest):
         }
     
     return await handle_api_error(
-        _process_kakao_login,
-        "카카오 로그인 처리",
-        "카카오 로그인이 완료되었습니다."
+        _process_social_login,
+        "소셜 로그인 처리",
+        f"{login_request.provider} 로그인이 완료되었습니다."
     )
 
 # 건강 지표 업데이트 엔드포인트
@@ -152,4 +156,83 @@ async def update_health_metrics(height: Optional[float] = None, weight: Optional
         _update_health_metrics,
         "건강 지표 업데이트",
         "건강 지표가 성공적으로 업데이트되었습니다."
+    )
+
+# 사용자 프로필 업데이트 엔드포인트 (생년월일, 키)
+@router.post("/profile/update", response_model=ApiResponse)
+async def update_user_profile(birth_date: Optional[str] = None, height: Optional[float] = None, current_user=Depends(get_current_user)):
+    """
+    사용자의 생년월일과 키를 업데이트합니다.
+    생년월일은 social_accounts 테이블에, 키는 health_metrics 테이블에 저장됩니다.
+    """
+    async def _update_user_profile():
+        user_id = current_user["user_id"]
+        updated_fields = {}
+        
+        if birth_date is None and height is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="생년월일 또는 키 중 최소한 하나는 제공해야 합니다."
+            )
+            
+        # 1. 생년월일 업데이트 (제공된 경우)
+        if birth_date is not None:
+            try:
+                # 날짜 형식 확인
+                parsed_date = datetime.strptime(birth_date, "%Y-%m-%d").date()
+                
+                # social_accounts 테이블에 생년월일 업데이트
+                birth_date_updated = user_dao.update_user(user_id, birth_date=parsed_date)
+                
+                if birth_date_updated:
+                    updated_fields["birth_date"] = birth_date
+                    logger.info(f"사용자 {user_id}의 생년월일이 업데이트되었습니다: {birth_date}")
+                else:
+                    logger.warning(f"사용자 {user_id}의 생년월일 업데이트 실패")
+            except ValueError:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="잘못된 날짜 형식입니다. YYYY-MM-DD 형식으로 입력해주세요."
+                )
+        
+        # 2. 키 업데이트 (제공된 경우)
+        metrics_id = None
+        if height is not None:
+            # 키 범위 검증 (예: 50cm ~ 250cm)
+            if height < 50 or height > 250:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="유효하지 않은 키입니다. 50cm에서 250cm 사이의 값을 입력해주세요."
+                )
+                
+            # health_metrics 테이블에 키 업데이트
+            metrics_id = user_dao.update_health_metrics(user_id=user_id, height=height)
+            
+            if metrics_id:
+                updated_fields["height"] = height
+                logger.info(f"사용자 {user_id}의 키가 업데이트되었습니다: {height}cm")
+            else:
+                logger.warning(f"사용자 {user_id}의 키 업데이트 실패")
+        
+        # 응답 데이터 구성
+        response_data = {
+            "user_id": user_id,
+            "updated_fields": updated_fields
+        }
+        
+        if metrics_id:
+            response_data["metrics_id"] = metrics_id
+            
+        if not updated_fields:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="프로필 업데이트 중 오류가 발생했습니다."
+            )
+            
+        return response_data
+    
+    return await handle_api_error(
+        _update_user_profile,
+        "사용자 프로필 업데이트",
+        "사용자 프로필이 성공적으로 업데이트되었습니다."
     ) 

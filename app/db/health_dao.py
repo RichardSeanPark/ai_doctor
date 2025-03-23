@@ -405,8 +405,8 @@ class HealthDAO:
                 
                 # 사용자 정보 조회 쿼리 (생년월일 포함)
                 user_query = """
-                    SELECT user_id, username, email, gender, birth_date, created_at
-                    FROM users
+                    SELECT user_id, social_id, provider, gender, birth_date, created_at
+                    FROM social_accounts
                     WHERE user_id = %s
                 """
                 
@@ -417,8 +417,8 @@ class HealthDAO:
                     if user_result:
                         user_info = {
                             'user_id': user_result['user_id'],
-                            'username': user_result['username'],
-                            'email': user_result['email'],
+                            'social_id': user_result['social_id'],
+                            'provider': user_result['provider'],
                             'gender': user_result['gender'],
                             'birth_date': user_result['birth_date'],
                             'created_at': user_result['created_at']
@@ -429,7 +429,7 @@ class HealthDAO:
                 gemini_query = """
                     SELECT gemini_response
                     FROM health_metrics
-                    WHERE user_id = %s AND gemini_response
+                    WHERE user_id = %s AND gemini_response IS NOT NULL
                     ORDER BY timestamp DESC
                     LIMIT 1
                 """
@@ -1006,9 +1006,9 @@ class HealthDAO:
             notification_time = (now + timedelta(minutes=minutes_threshold)).time()
             
             query = """
-            SELECT es.*, u.username, u.email, u.phone, er.goal, er.recommendation_summary
+            SELECT es.*, sa.social_id, sa.provider, sa.gender, er.goal, er.recommendation_summary
             FROM exercise_schedules es
-            JOIN users u ON es.user_id = u.user_id
+            JOIN social_accounts sa ON es.user_id = sa.user_id
             JOIN exercise_recommendations er ON es.recommendation_id = er.recommendation_id
             WHERE es.day_of_week = %s
             AND es.time_of_day BETWEEN %s AND DATE_ADD(%s, INTERVAL 5 MINUTE)
@@ -1025,9 +1025,9 @@ class HealthDAO:
                     'schedule_id': result['schedule_id'],
                     'recommendation_id': result['recommendation_id'],
                     'user_id': result['user_id'],
-                    'username': result['username'],
-                    'email': result['email'],
-                    'phone': result['phone'],
+                    'social_id': result['social_id'],
+                    'provider': result['provider'],
+                    'gender': result['gender'],
                     'day_of_week': result['day_of_week'],
                     'time_of_day': str(result['time_of_day']),
                     'duration_minutes': result['duration_minutes'],

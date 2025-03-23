@@ -24,7 +24,7 @@ from app.api import exercise_routes  # exercise_routes 임포트 추가
 from app.models.api_models import ApiResponse  # ApiResponse를 직접 정의하지 않고 임포트
 from app.models.voice_models import VoiceQueryRequest, VoiceResponse, ConsultationRequest
 from app.models.health_data import HealthMetrics, HealthAssessment, DietEntry  # 실제 존재하는 클래스로 대체
-from app.models.user_data import UserCreate, UserLogin, UserProfile, UserResponse
+from app.models.user_data import UserProfile, UserResponse
 from app.models.notification import AndroidNotification  # NotificationSettings 대신 AndroidNotification 사용
 from app.config.settings import Settings
 from app.utils.conversation_manager import ConversationManager
