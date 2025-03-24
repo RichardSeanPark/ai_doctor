@@ -127,7 +127,7 @@ class RealGeminiAgent:
 # 환경 설정
 MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-1.5-pro")
 
-def get_gemini_agent(temperature: float = 0.1) -> RealGeminiAgent:
+def get_gemini_agent(temperature: float = 0.3) -> RealGeminiAgent:
     """실제 Gemini AI 모델 에이전트를 생성합니다."""
     return RealGeminiAgent(
         model=MODEL_NAME, 
@@ -137,17 +137,17 @@ def get_gemini_agent(temperature: float = 0.1) -> RealGeminiAgent:
 def get_health_agent() -> RealGeminiAgent:
     """건강 상담을 위한 실제 Gemini AI 에이전트를 생성합니다."""
     # 에이전트 생성
-    return get_gemini_agent(temperature=0.2)
+    return get_gemini_agent(temperature=0.3)
 
 def get_diet_agent() -> RealGeminiAgent:
     """식이 상담을 위한 실제 Gemini AI 에이전트를 생성합니다."""
     # 에이전트 생성
-    return get_gemini_agent(temperature=0.2)
+    return get_gemini_agent(temperature=0.3)
 
 def get_diet_specialist_agent() -> RealGeminiAgent:
     """다이어트 전문 상담을 위한 실제 Gemini AI 에이전트를 생성합니다."""
     # 에이전트 생성
-    return get_gemini_agent(temperature=0.2)
+    return get_gemini_agent(temperature=0.3)
 
 def get_voice_agent() -> RealGeminiAgent:
     """음성 상담을 위한 실제 Gemini AI 에이전트를 생성합니다."""
@@ -162,17 +162,17 @@ def get_notification_agent() -> RealGeminiAgent:
 def get_diet_analysis_agent() -> RealGeminiAgent:
     """식단 분석을 위한 실제 Gemini AI 에이전트를 생성합니다."""
     # 에이전트 생성
-    return get_gemini_agent(temperature=0.1)
+    return get_gemini_agent(temperature=0.3)
 
 def get_symptom_analysis_agent() -> RealGeminiAgent:
     """증상 분석을 위한 실제 Gemini AI 에이전트를 생성합니다."""
     # 에이전트 생성
-    return get_gemini_agent(temperature=0.1)
+    return get_gemini_agent(temperature=0.3)
 
 def get_food_image_analysis_agent() -> RealGeminiAgent:
     """음식 이미지 분석을 위한 실제 Gemini AI 에이전트를 생성합니다."""
     # 에이전트 생성
-    return get_gemini_agent(temperature=0.1)
+    return get_gemini_agent(temperature=0.3)
 
 def get_voice_query_agent() -> RealGeminiAgent:
     """음성 쿼리 처리를 위한 실제 Gemini AI 에이전트를 생성합니다."""
@@ -182,17 +182,17 @@ def get_voice_query_agent() -> RealGeminiAgent:
 def get_conversation_summary_agent() -> RealGeminiAgent:
     """대화 요약을 위한 실제 Gemini AI 에이전트를 생성합니다."""
     # 에이전트 생성
-    return get_gemini_agent(temperature=0.1)
+    return get_gemini_agent(temperature=0.3)
 
 def get_health_entity_extraction_agent() -> RealGeminiAgent:
     """건강 엔티티 추출을 위한 실제 Gemini AI 에이전트를 생성합니다."""
     # 에이전트 생성
-    return get_gemini_agent(temperature=0.0)
+    return get_gemini_agent(temperature=0.3)
 
 def get_key_points_extraction_agent() -> RealGeminiAgent:
     """핵심 포인트 추출을 위한 실제 Gemini AI 에이전트를 생성합니다."""
     # 에이전트 생성
-    return get_gemini_agent(temperature=0.1)
+    return get_gemini_agent(temperature=0.3)
 
 def get_exercise_specialist_agent() -> RealGeminiAgent:
     """운동 전문가 상담을 위한 실제 Gemini AI 에이전트를 생성합니다."""

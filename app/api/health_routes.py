@@ -7,7 +7,8 @@ from datetime import datetime
 from typing import Dict, Any, Optional, List
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Body
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, validator
 
 from app.db.health_dao import HealthDAO
@@ -219,7 +220,9 @@ async def get_health_profile(user=Depends(get_current_user)):
 
 @router.post("/analyze", response_model=ApiResponse)
 async def analyze_health(query: HealthQueryRequest, user=Depends(get_current_user)):
-    """건강 분석 요청"""
+    """
+    건강 분석 요청 - 항상 새로운 건강 분석 수행
+    """
     try:
         # 사용자 건강 프로필 조회
         profile = health_dao.get_complete_health_profile(user["user_id"])
@@ -233,57 +236,43 @@ async def analyze_health(query: HealthQueryRequest, user=Depends(get_current_use
         )
         
         try:
-            # gemini_response가 있는 경우 그것을 사용
-            if profile.get("gemini_response"):
-                logger.info("기존 gemini_response 사용")
-                assessment_dict = {
-                    "assessment_id": str(uuid.uuid4()),
-                    "timestamp": datetime.now().isoformat(),
-                    "health_status": "분석 완료",
-                    "concerns": [],
-                    "recommendations": [],
-                    "has_concerns": False,
-                    "assessment_summary": profile["gemini_response"],
-                    "query_text": query.query_text
-                }
+            # 새로운 건강 분석 수행
+            logger.info("새로운 건강 분석 수행")
+            logger.info("analyze_health_metrics 함수 호출 전")
+            assessment = await analyze_health_metrics(user_state)
+            logger.info("analyze_health_metrics 함수 호출 후")
+            
+            # 분석 결과를 데이터베이스에 저장
+            if hasattr(assessment, "assessment_summary") and assessment.assessment_summary:
+                logger.info("gemini_response 업데이트")
+                # 최신 건강 지표 ID 조회
+                latest_metrics = health_dao.get_latest_health_metrics(user["user_id"])
+                if latest_metrics and "metrics_id" in latest_metrics:
+                    # gemini_response 업데이트
+                    health_dao.update_gemini_response(
+                        latest_metrics["metrics_id"], 
+                        assessment.assessment_summary
+                    )
+                    logger.info(f"metrics_id {latest_metrics['metrics_id']}에 gemini_response 업데이트 완료")
+            
+            # Pydantic v2에서는 .dict() 대신 .model_dump()를 사용
+            # Pydantic v1에서는 .dict()를 사용
+            if hasattr(assessment, "model_dump"):
+                assessment_dict = assessment.model_dump()
+            elif hasattr(assessment, "dict"):
+                assessment_dict = assessment.dict()
             else:
-                # 새로운 건강 분석 수행
-                logger.info("새로운 건강 분석 수행")
-                logger.info("analyze_health_metrics 함수 호출 전")
-                assessment = await analyze_health_metrics(user_state)
-                logger.info("analyze_health_metrics 함수 호출 후")
-                
-                # 분석 결과를 데이터베이스에 저장
-                if hasattr(assessment, "assessment_summary") and assessment.assessment_summary:
-                    logger.info("gemini_response 업데이트")
-                    # 최신 건강 지표 ID 조회
-                    latest_metrics = health_dao.get_latest_health_metrics(user["user_id"])
-                    if latest_metrics and "metrics_id" in latest_metrics:
-                        # gemini_response 업데이트
-                        health_dao.update_gemini_response(
-                            latest_metrics["metrics_id"], 
-                            assessment.assessment_summary
-                        )
-                        logger.info(f"metrics_id {latest_metrics['metrics_id']}에 gemini_response 업데이트 완료")
-                
-                # Pydantic v2에서는 .dict() 대신 .model_dump()를 사용
-                # Pydantic v1에서는 .dict()를 사용
-                if hasattr(assessment, "model_dump"):
-                    assessment_dict = assessment.model_dump()
-                elif hasattr(assessment, "dict"):
-                    assessment_dict = assessment.dict()
-                else:
-                    # 객체가 dict 메서드를 가지고 있지 않은 경우 직접 딕셔너리로 변환
-                    assessment_dict = {
-                        "assessment_id": str(assessment.assessment_id),
-                        "timestamp": assessment.timestamp.isoformat(),
-                        "health_status": assessment.health_status,
-                        "concerns": assessment.concerns,
-                        "recommendations": assessment.recommendations,
-                        "has_concerns": assessment.has_concerns,
-                        "assessment_summary": assessment.assessment_summary,
-                        "query_text": assessment.query_text
-                    }
+                # 객체가 dict 메서드를 가지고 있지 않은 경우 직접 딕셔너리로 변환
+                assessment_dict = {
+                    "assessment_id": str(assessment.assessment_id),
+                    "timestamp": assessment.timestamp.isoformat(),
+                    "health_status": assessment.health_status,
+                    "concerns": assessment.concerns,
+                    "recommendations": assessment.recommendations,
+                    "has_concerns": assessment.has_concerns,
+                    "assessment_summary": assessment.assessment_summary,
+                    "query_text": assessment.query_text
+                }
             
             return ApiResponse(
                 success=True,
@@ -301,4 +290,94 @@ async def analyze_health(query: HealthQueryRequest, user=Depends(get_current_use
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"건강 분석 중 오류가 발생했습니다: {str(e)}"
+        )
+
+@router.post("/analyze/latest", response_model=ApiResponse)
+async def get_latest_analysis(query: HealthQueryRequest, user=Depends(get_current_user)):
+    """
+    최신 건강 분석 결과 요청 - DB에서 기존 데이터만 가져오고 새로운 분석은 수행하지 않음
+    """
+    try:
+        # 사용자 건강 프로필 조회
+        profile = health_dao.get_complete_health_profile(user["user_id"])
+        
+        try:
+            # gemini_response가 있는 경우 그것을 사용
+            if profile.get("gemini_response"):
+                logger.info("기존 gemini_response 사용")
+                assessment_dict = {
+                    "assessment_id": str(uuid.uuid4()),
+                    "timestamp": datetime.now().isoformat(),
+                    "health_status": "분석 완료",
+                    "concerns": [],
+                    "recommendations": [],
+                    "has_concerns": False,
+                    "assessment_summary": profile["gemini_response"],
+                    "query_text": query.query_text
+                }
+                
+                return ApiResponse(
+                    success=True,
+                    message="최신 건강 분석 결과 조회 완료",
+                    data={"assessment": assessment_dict}
+                )
+            else:
+                # 기존 분석 결과가 없는 경우
+                logger.warning("기존 건강 분석 결과가 없습니다.")
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="저장된 건강 분석 결과가 없습니다. 먼저 /analyze 엔드포인트를 통해 건강 분석을 수행해주세요."
+                )
+        except HTTPException:
+            raise
+    except Exception as e:
+        logger.error(f"건강 분석 결과 조회 오류: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"건강 분석 결과 조회 중 오류가 발생했습니다: {str(e)}"
+        )
+
+@router.get("/analyze/latest", response_model=ApiResponse)
+async def get_latest_analysis_get(query_text: Optional[str] = None, user=Depends(get_current_user)):
+    """
+    최신 건강 분석 결과 요청 (GET 방식) - DB에서 기존 데이터만 가져오고 새로운 분석은 수행하지 않음
+    """
+    try:
+        # 사용자 건강 프로필 조회
+        profile = health_dao.get_complete_health_profile(user["user_id"])
+        
+        try:
+            # gemini_response가 있는 경우 그것을 사용
+            if profile.get("gemini_response"):
+                logger.info("기존 gemini_response 사용")
+                assessment_dict = {
+                    "assessment_id": str(uuid.uuid4()),
+                    "timestamp": datetime.now().isoformat(),
+                    "health_status": "분석 완료",
+                    "concerns": [],
+                    "recommendations": [],
+                    "has_concerns": False,
+                    "assessment_summary": profile["gemini_response"],
+                    "query_text": query_text or ""
+                }
+                
+                return ApiResponse(
+                    success=True,
+                    message="최신 건강 분석 결과 조회 완료",
+                    data={"assessment": assessment_dict}
+                )
+            else:
+                # 기존 분석 결과가 없는 경우
+                logger.warning("기존 건강 분석 결과가 없습니다.")
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="저장된 건강 분석 결과가 없습니다. 먼저 /analyze 엔드포인트를 통해 건강 분석을 수행해주세요."
+                )
+        except HTTPException:
+            raise
+    except Exception as e:
+        logger.error(f"건강 분석 결과 조회 오류: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"건강 분석 결과 조회 중 오류가 발생했습니다: {str(e)}"
         ) 
