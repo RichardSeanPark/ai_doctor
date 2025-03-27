@@ -104,15 +104,15 @@ class HealthDAO:
             logger.error(f"최신 건강 지표 조회 오류: {str(e)}")
             return None
     
-    def get_latest_health_metrics_by_column(self, user_id: str) -> Dict[str, Any]:
+    def get_yearly_health_metrics(self, user_id: str) -> Dict[str, Any]:
         """
-        사용자의 각 건강 지표 컬럼별로 null이 아닌 최신 데이터 조회
+        사용자의 최근 1년간 건강 지표 데이터 조회
         
         Args:
             user_id: 사용자 ID
             
         Returns:
-            각 컬럼별 최신 데이터가 포함된 딕셔너리
+            각 컬럼별 최신 데이터와 1년치 시계열 데이터가 포함된 딕셔너리
         """
         try:
             # 모든 건강 지표 컬럼 목록
@@ -123,10 +123,17 @@ class HealthDAO:
                 'sleep_hours', 'steps'
             ]
             
-            combined_metrics = {
+            # 최신 데이터를 저장할 딕셔너리
+            latest_metrics = {
                 'user_id': user_id,
                 'timestamp': datetime.now().isoformat()
             }
+            
+            # 시계열 데이터를 저장할 딕셔너리
+            time_series_metrics = {column: [] for column in columns}
+            
+            # 1년 전 날짜 계산
+            one_year_ago = (datetime.now() - timedelta(days=365)).strftime('%Y-%m-%d')
             
             # 새로운 연결 생성
             conn = self.db.connect()
@@ -137,7 +144,8 @@ class HealthDAO:
             
             # 각 컬럼별로 최신 null이 아닌 값 조회
             for column in columns:
-                query = f"""
+                # 최신 값 조회
+                latest_query = f"""
                     SELECT {column}, timestamp FROM health_metrics
                     WHERE user_id = %s AND {column} IS NOT NULL
                     ORDER BY timestamp DESC
@@ -145,37 +153,64 @@ class HealthDAO:
                 """
                 
                 with conn.cursor() as cursor:
-                    cursor.execute(query, (user_id,))
-                    result = cursor.fetchone()
+                    cursor.execute(latest_query, (user_id,))
+                    latest_result = cursor.fetchone()
                 
-                if result and result[column] is not None:
-                    combined_metrics[column] = result[column]
-                    logger.debug(f"컬럼 {column}의 최신 데이터 조회: {result[column]} (날짜: {result['timestamp']})")
+                if latest_result and latest_result[column] is not None:
+                    latest_metrics[column] = latest_result[column]
+                    logger.debug(f"컬럼 {column}의 최신 데이터 조회: {latest_result[column]} (날짜: {latest_result['timestamp']})")
+                
+                # 1년치 시계열 데이터 조회
+                time_series_query = f"""
+                    SELECT {column}, timestamp FROM health_metrics
+                    WHERE user_id = %s 
+                    AND {column} IS NOT NULL 
+                    AND timestamp >= %s
+                    ORDER BY timestamp ASC
+                """
+                
+                with conn.cursor() as cursor:
+                    cursor.execute(time_series_query, (user_id, one_year_ago))
+                    time_series_results = cursor.fetchall()
+                
+                # 시계열 데이터 가공
+                for result in time_series_results:
+                    if result and result[column] is not None:
+                        time_series_metrics[column].append({
+                            'value': result[column],
+                            'timestamp': result['timestamp'].isoformat() if isinstance(result['timestamp'], datetime) else result['timestamp']
+                        })
             
             # 명시적으로 커밋하여 트랜잭션 완료
             conn.commit()
             
             # BMI 자동 계산 (키와 체중이 있는 경우)
-            if 'weight' in combined_metrics and 'height' in combined_metrics and combined_metrics['height'] > 0:
-                weight = combined_metrics['weight']
-                height_m = combined_metrics['height'] / 100.0
+            if 'weight' in latest_metrics and 'height' in latest_metrics and latest_metrics['height'] > 0:
+                weight = latest_metrics['weight']
+                height_m = latest_metrics['height'] / 100.0
                 bmi = round(weight / (height_m * height_m), 1)
-                combined_metrics['bmi'] = bmi
-                logger.info(f"컬럼별 BMI 자동 계산: {bmi} (체중: {weight}kg, 키: {combined_metrics['height']}cm)")
+                latest_metrics['bmi'] = bmi
+                logger.info(f"BMI 자동 계산: {bmi} (체중: {weight}kg, 키: {latest_metrics['height']}cm)")
             
             # 혈압 데이터가 있는 경우 blood_pressure 객체 추가
-            if 'blood_pressure_systolic' in combined_metrics and 'blood_pressure_diastolic' in combined_metrics:
-                combined_metrics['blood_pressure'] = {
-                    'systolic': combined_metrics['blood_pressure_systolic'],
-                    'diastolic': combined_metrics['blood_pressure_diastolic']
+            if 'blood_pressure_systolic' in latest_metrics and 'blood_pressure_diastolic' in latest_metrics:
+                latest_metrics['blood_pressure'] = {
+                    'systolic': latest_metrics['blood_pressure_systolic'],
+                    'diastolic': latest_metrics['blood_pressure_diastolic']
                 }
             
-            logger.info(f"사용자 {user_id}의 컬럼별 최신 건강 지표 조회 완료: {len(combined_metrics) - 2}개 항목")
-            return combined_metrics
+            # 최종 결과 집계
+            result = {
+                'latest': latest_metrics,
+                'time_series': time_series_metrics
+            }
+            
+            logger.info(f"사용자 {user_id}의 1년치 건강 지표 조회 완료")
+            return result
             
         except Exception as e:
-            logger.error(f"컬럼별 최신 건강 지표 조회 오류: {str(e)}")
-            return {'user_id': user_id}
+            logger.error(f"1년치 건강 지표 조회 오류: {str(e)}")
+            return {'user_id': user_id, 'latest': {}, 'time_series': {}}
     
     def get_health_metrics_history(self, user_id: str, limit: int = 30) -> List[Dict[str, Any]]:
         """사용자의 건강 지표 이력 조회"""
@@ -389,8 +424,8 @@ class HealthDAO:
     def get_complete_health_profile(self, user_id: str) -> Dict[str, Any]:
         """사용자의 종합 건강 프로필 조회"""
         try:
-            # 최신 건강 지표 조회
-            latest_metrics = self.get_latest_health_metrics_by_column(user_id)
+            # 건강 지표 조회 (최신 및 1년치 시계열 데이터)
+            metrics_data = self.get_yearly_health_metrics(user_id)
             
             # 사용자 기본 정보 조회 (생년월일 포함)
             conn = None
@@ -453,7 +488,8 @@ class HealthDAO:
             # 통합 프로필 구성
             profile = {
                 'user_id': user_id,
-                'health_metrics': latest_metrics or {},
+                'health_metrics': metrics_data.get('latest', {}),
+                'health_metrics_history': metrics_data.get('time_series', {}),
                 'dietary_restrictions': dietary_restrictions or [],
                 'gemini_response': latest_gemini_response,
                 'last_updated': datetime.now().isoformat()

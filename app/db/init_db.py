@@ -154,6 +154,19 @@ def init_database():
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     """
     
+    # 앱 버전 관리 테이블 생성
+    create_app_versions_table = """
+    CREATE TABLE IF NOT EXISTS app_versions (
+        version_code INT NOT NULL,
+        version_name VARCHAR(20) NOT NULL,
+        min_api_level INT DEFAULT 21,
+        force_update BOOLEAN DEFAULT FALSE,
+        change_log TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (version_code)
+    )
+    """
+    
     try:
         # 테이블 생성 실행
         db.execute_query(create_social_accounts_table)
@@ -179,6 +192,9 @@ def init_database():
         
         db.execute_query(create_exercise_completions_table)
         logger.info("exercise_completions 테이블 생성 완료")
+        
+        db.execute_query(create_app_versions_table)
+        logger.info("app_versions 테이블 생성 완료")
         
         return True
     except Exception as e:

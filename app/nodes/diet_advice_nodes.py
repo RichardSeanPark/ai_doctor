@@ -414,8 +414,8 @@ async def provide_diet_advice(state: Dict[str, Any]) -> Dict[str, Any]:
         logger.info(f"[DIET_ADVICE] 식이 제한(요청): {dietary_restrictions_req}")
         logger.info(f"[DIET_ADVICE] 특정 관심사: {specific_concerns}")
         
-        # 건강 지표 정보 추출 - health_metrics는 이미 get_latest_health_metrics_by_column 함수를 통해
-        # null이 아닌 최신 데이터가 포함되어 있음
+        # 건강 지표 정보 추출 - health_metrics는 이미 get_yearly_health_metrics 함수를 통해
+        # 최신 데이터와 1년치 시계열 데이터가 포함되어 있음
         health_metrics = {}
         if 'health_metrics' in user_profile and user_profile['health_metrics']:
             health_metrics = user_profile['health_metrics']
