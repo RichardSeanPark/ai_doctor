@@ -104,15 +104,15 @@ class HealthDAO:
             logger.error(f"최신 건강 지표 조회 오류: {str(e)}")
             return None
     
-    def get_yearly_health_metrics(self, user_id: str) -> Dict[str, Any]:
+    def get_three_months_health_metrics(self, user_id: str) -> Dict[str, Any]:
         """
-        사용자의 최근 1년간 건강 지표 데이터 조회
+        사용자의 최근 3개월간 건강 지표 데이터 조회
         
         Args:
             user_id: 사용자 ID
             
         Returns:
-            각 컬럼별 최신 데이터와 1년치 시계열 데이터가 포함된 딕셔너리
+            각 컬럼별 최신 데이터와 3개월치 시계열 데이터가 포함된 딕셔너리
         """
         try:
             # 모든 건강 지표 컬럼 목록
@@ -132,8 +132,8 @@ class HealthDAO:
             # 시계열 데이터를 저장할 딕셔너리
             time_series_metrics = {column: [] for column in columns}
             
-            # 1년 전 날짜 계산
-            one_year_ago = (datetime.now() - timedelta(days=365)).strftime('%Y-%m-%d')
+            # 3개월 전 날짜 계산
+            three_months_ago = (datetime.now() - timedelta(days=90)).strftime('%Y-%m-%d')
             
             # 새로운 연결 생성
             conn = self.db.connect()
@@ -170,7 +170,7 @@ class HealthDAO:
                 """
                 
                 with conn.cursor() as cursor:
-                    cursor.execute(time_series_query, (user_id, one_year_ago))
+                    cursor.execute(time_series_query, (user_id, three_months_ago))
                     time_series_results = cursor.fetchall()
                 
                 # 시계열 데이터 가공
@@ -198,6 +198,41 @@ class HealthDAO:
                     'systolic': latest_metrics['blood_pressure_systolic'],
                     'diastolic': latest_metrics['blood_pressure_diastolic']
                 }
+            
+            # 시계열 데이터에 BMI 계산 추가
+            time_series_metrics['bmi'] = []
+            
+            # weight와 height의 시간별 데이터를 저장할 딕셔너리
+            weight_by_time = {}
+            height_by_time = {}
+            
+            # weight와 height 데이터를 timestamp별로 정리
+            for weight_data in time_series_metrics['weight']:
+                weight_by_time[weight_data['timestamp']] = weight_data['value']
+            
+            for height_data in time_series_metrics['height']:
+                height_by_time[height_data['timestamp']] = height_data['value']
+            
+            # 모든 타임스탬프 가져오기
+            all_timestamps = set(weight_by_time.keys()) | set(height_by_time.keys())
+            
+            # 각 타임스탬프에 대해 weight와 height 데이터가 모두 있는 경우 BMI 계산
+            for timestamp in all_timestamps:
+                if timestamp in weight_by_time and timestamp in height_by_time:
+                    weight = weight_by_time[timestamp]
+                    height = height_by_time[timestamp]
+                    
+                    if height > 0:
+                        height_m = height / 100.0
+                        bmi = round(weight / (height_m * height_m), 1)
+                        time_series_metrics['bmi'].append({
+                            'value': bmi,
+                            'timestamp': timestamp
+                        })
+                        logger.debug(f"시계열 BMI 계산: {timestamp}, BMI: {bmi}")
+            
+            # bmi 시계열 데이터를 시간 순으로 정렬
+            time_series_metrics['bmi'].sort(key=lambda x: x['timestamp'])
             
             # 최종 결과 집계
             result = {
@@ -424,8 +459,8 @@ class HealthDAO:
     def get_complete_health_profile(self, user_id: str) -> Dict[str, Any]:
         """사용자의 종합 건강 프로필 조회"""
         try:
-            # 건강 지표 조회 (최신 및 1년치 시계열 데이터)
-            metrics_data = self.get_yearly_health_metrics(user_id)
+            # 건강 지표 조회 (최신 및 3개월치 시계열 데이터)
+            metrics_data = self.get_three_months_health_metrics(user_id)
             
             # 사용자 기본 정보 조회 (생년월일 포함)
             conn = None
@@ -518,17 +553,6 @@ class HealthDAO:
         try:
             logger.info(f"[HealthDAO] 운동 추천 정보 저장 시작: {recommendation.recommendation_id}")
             
-            sql = """
-            INSERT INTO exercise_recommendations (
-                recommendation_id, user_id, goal, fitness_level, recommended_frequency,
-                exercise_plans, special_instructions, recommendation_summary, timestamp,
-                exercise_location, preferred_exercise_type, available_equipment,
-                time_per_session, experience_level, intensity_preference, exercise_constraints
-            ) VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
-            )
-            """
-            
             # JSON 필드 직렬화
             exercise_plans_json = json.dumps(recommendation.exercise_plans, ensure_ascii=False)
             special_instructions_json = json.dumps(recommendation.special_instructions, ensure_ascii=False)
@@ -537,31 +561,98 @@ class HealthDAO:
             
             logger.debug(f"[HealthDAO] JSON 필드 직렬화 완료")
             
-            params = (
-                recommendation.recommendation_id,
-                recommendation.user_id,
-                recommendation.goal,
-                recommendation.fitness_level,
-                recommendation.recommended_frequency,
-                exercise_plans_json,
-                special_instructions_json,
-                recommendation.recommendation_summary,
-                recommendation.timestamp,
-                recommendation.exercise_location,
-                recommendation.preferred_exercise_type,
-                available_equipment_json,
-                recommendation.time_per_session,
-                recommendation.experience_level,
-                recommendation.intensity_preference,
-                exercise_constraints_json
-            )
+            # 동일 날짜에 기존 레코드가 있는지 확인
+            check_query = """
+            SELECT recommendation_id FROM exercise_recommendations
+            WHERE user_id = %s AND DATE(timestamp) = DATE(%s)
+            """
             
-            logger.debug(f"[HealthDAO] 파라미터 준비 완료: {len(params)} 개")
+            existing_record = self.db.fetch_one(check_query, (recommendation.user_id, recommendation.timestamp))
             
-            # Database 객체에서 직접 execute_query 메서드 사용
-            affected_rows = self.db.execute_query(sql, params)
+            if existing_record:
+                # 기존 레코드가 있으면 업데이트
+                logger.info(f"[HealthDAO] 동일 날짜의 기존 운동 추천 레코드 발견: {existing_record['recommendation_id']}, 업데이트 수행")
+                
+                update_query = """
+                UPDATE exercise_recommendations SET
+                    goal = %s,
+                    fitness_level = %s,
+                    recommended_frequency = %s,
+                    exercise_plans = %s,
+                    special_instructions = %s,
+                    recommendation_summary = %s,
+                    timestamp = %s,
+                    exercise_location = %s,
+                    preferred_exercise_type = %s,
+                    available_equipment = %s,
+                    time_per_session = %s,
+                    experience_level = %s,
+                    intensity_preference = %s,
+                    exercise_constraints = %s
+                WHERE recommendation_id = %s
+                """
+                
+                params = (
+                    recommendation.goal,
+                    recommendation.fitness_level,
+                    recommendation.recommended_frequency,
+                    exercise_plans_json,
+                    special_instructions_json,
+                    recommendation.recommendation_summary,
+                    recommendation.timestamp,
+                    recommendation.exercise_location,
+                    recommendation.preferred_exercise_type,
+                    available_equipment_json,
+                    recommendation.time_per_session,
+                    recommendation.experience_level,
+                    recommendation.intensity_preference,
+                    exercise_constraints_json,
+                    existing_record['recommendation_id']
+                )
+                
+                affected_rows = self.db.execute_query(update_query, params)
+                
+                # 추천 ID를 기존 ID로 업데이트 (일관성 유지)
+                recommendation.recommendation_id = existing_record['recommendation_id']
+                
+                logger.info(f"[HealthDAO] 운동 추천 정보 업데이트 성공: {existing_record['recommendation_id']}, 영향 받은 행: {affected_rows}")
+            else:
+                # 기존 레코드가 없으면 새로 삽입
+                logger.info(f"[HealthDAO] 새 운동 추천 정보 삽입: {recommendation.recommendation_id}")
+                
+                insert_query = """
+                INSERT INTO exercise_recommendations (
+                    recommendation_id, user_id, goal, fitness_level, recommended_frequency,
+                    exercise_plans, special_instructions, recommendation_summary, timestamp,
+                    exercise_location, preferred_exercise_type, available_equipment,
+                    time_per_session, experience_level, intensity_preference, exercise_constraints
+                ) VALUES (
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                )
+                """
+                
+                params = (
+                    recommendation.recommendation_id,
+                    recommendation.user_id,
+                    recommendation.goal,
+                    recommendation.fitness_level,
+                    recommendation.recommended_frequency,
+                    exercise_plans_json,
+                    special_instructions_json,
+                    recommendation.recommendation_summary,
+                    recommendation.timestamp,
+                    recommendation.exercise_location,
+                    recommendation.preferred_exercise_type,
+                    available_equipment_json,
+                    recommendation.time_per_session,
+                    recommendation.experience_level,
+                    recommendation.intensity_preference,
+                    exercise_constraints_json
+                )
+                
+                affected_rows = self.db.execute_query(insert_query, params)
+                logger.info(f"[HealthDAO] 새 운동 추천 정보 저장 성공: {recommendation.recommendation_id}, 영향 받은 행: {affected_rows}")
             
-            logger.info(f"[HealthDAO] 운동 추천 정보 저장 성공: {recommendation.recommendation_id}, 영향 받은 행: {affected_rows}")
             return True
         except Exception as e:
             logger.error(f"[HealthDAO] 운동 추천 정보 저장 중 오류: {str(e)}")
@@ -687,7 +778,7 @@ class HealthDAO:
                 )
                 recommendations.append(recommendation)
             
-            logger.info(f"[HealthDAO] 사용자 운동 추천 목록 조회 성공: 사용자 {user_id}, {len(recommendations)}개 결과")
+            logger.info(f"[HealthDAO] 최근 1달 내 사용자 운동 추천 목록 조회 성공: 사용자 {user_id}, {len(recommendations)}개 결과")
             return recommendations
         except Exception as e:
             logger.error(f"[HealthDAO] 사용자 운동 추천 목록 조회 중 오류: {str(e)}")
@@ -914,6 +1005,53 @@ class HealthDAO:
             
         except Exception as e:
             logger.error(f"사용자 운동 스케줄 목록 조회 중 오류 발생: {str(e)}")
+            return []
+    
+    def get_recent_diet_advice_history(self, user_id: str, months: int = 1) -> List[Dict[str, Any]]:
+        """
+        사용자의 최근 식단 조언 기록을 조회합니다.
+        
+        Args:
+            user_id: 사용자 ID
+            months: 가져올 기간(월 단위, 기본값 1)
+            
+        Returns:
+            List[Dict[str, Any]]: 최근 식단 조언 기록 목록
+        """
+        try:
+            # months 개월 전 날짜 계산
+            months_ago = (datetime.now() - timedelta(days=30 * months)).strftime('%Y-%m-%d')
+            
+            query = """
+            SELECT meal_date, meal_type, 
+                   food_items, dietary_restrictions, created_at
+            FROM diet_advice_history
+            WHERE user_id = %s AND meal_date >= %s
+            ORDER BY meal_date DESC, created_at DESC
+            """
+            
+            results = self.db.fetch_all(query, (user_id, months_ago))
+            
+            diet_history = []
+            for result in results:
+                # JSON 필드 파싱
+                food_items = json.loads(result['food_items']) if result['food_items'] else []
+                dietary_restrictions = json.loads(result['dietary_restrictions']) if result['dietary_restrictions'] else []
+                
+                record = {
+                    'meal_date': result['meal_date'],
+                    'meal_type': result['meal_type'],
+                    'food_items': food_items,
+                    'dietary_restrictions': dietary_restrictions,
+                    'created_at': result['created_at']
+                }
+                diet_history.append(record)
+            
+            logger.info(f"최근 {months}개월 식단 조언 기록 {len(diet_history)}개 조회 성공: 사용자 {user_id}")
+            return diet_history
+            
+        except Exception as e:
+            logger.error(f"최근 식단 조언 기록 조회 중 오류 발생: {str(e)}")
             return []
     
     def save_exercise_completion(self, completion: ExerciseCompletion) -> bool:

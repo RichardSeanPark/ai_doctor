@@ -10,11 +10,12 @@ from langgraph.graph import END
 from app.models.health_data import HealthAssessment, HealthMetrics, Symptom
 from app.models.notification import UserState, AndroidNotification
 from app.agents.agent_config import get_health_agent, RealGeminiAgent
+from app.db.health_dao import HealthDAO
 
 # 로거 설정
 logger = logging.getLogger(__name__)
 
-async def analyze_health_metrics(state: UserState) -> HealthAssessment:
+async def analyze_health_metrics(state: Dict[str, Any]) -> HealthAssessment:
     """
     사용자의 건강 지표 분석
     
@@ -25,7 +26,7 @@ async def analyze_health_metrics(state: UserState) -> HealthAssessment:
         HealthAssessment: 건강 평가 결과
     """
     try:
-        logger.info(f"건강 지표 분석 시작 - 사용자 ID: {state.user_id}")
+        logger.info(f"건강 지표 분석 시작 - 사용자 ID: {state.health_metrics['user_id']}")
         
         # 음성 쿼리 처리
         if state.query_text:
@@ -33,9 +34,61 @@ async def analyze_health_metrics(state: UserState) -> HealthAssessment:
         
         # 건강 지표 정보 추출
         health_metrics = {}
+        health_metrics_history = {}
+        
+        # 데이터 액세스 객체 초기화
+        health_dao = HealthDAO()
+        
+        # 운동 이력 데이터 조회
+        logger.info(f"[HEALTH_CHECK] 사용자 운동 이력 조회 시작 - 사용자 ID: {state.health_metrics['user_id']}")
+        exercise_recommendations = health_dao.get_user_exercise_recommendations(state.health_metrics['user_id'], limit=30)
+        exercise_history_data = []
+        
+        if exercise_recommendations:
+            logger.info(f"[HEALTH_CHECK] 운동 이력 데이터 {len(exercise_recommendations)}개 조회 성공")
+            # 필요한 필드만 추출하여 정리
+            for recommendation in exercise_recommendations:
+                lst_exercise_plans = []
+                for plan in recommendation.exercise_plans:
+                    exercise_name = plan.get("name", "")
+                    lst_exercise_plans.append(exercise_name)
+                exercise_data = {
+                    "exercise_plans": lst_exercise_plans
+                }
+                exercise_history_data.append(exercise_data)
+        else:
+            logger.info(f"[HEALTH_CHECK] 운동 이력 데이터 없음")
+            
+        # 식단 이력 데이터 조회
+        logger.info(f"[HEALTH_CHECK] 사용자 식단 이력 조회 시작 - 사용자 ID: {state.health_metrics['user_id']}")
+        recent_diet_history = health_dao.get_recent_diet_advice_history(state.health_metrics['user_id'], months=1)
+        diet_history_data = []
+        
+        if recent_diet_history:
+            logger.info(f"[HEALTH_CHECK] 식단 이력 데이터 {len(recent_diet_history)}개 조회 성공")
+            # 필요한 필드만 추출하여 정리
+            for diet_entry in recent_diet_history:
+                # food_items에서 calories 제거
+                processed_food_items = []
+                if diet_entry.get("food_items"):
+                    for food_item in diet_entry.get("food_items", []):
+                        # calories 필드 제외하고 새 딕셔너리 생성
+                        clean_food_item = {k: v for k, v in food_item.items() if k != 'calories'}
+                        processed_food_items.append(clean_food_item)
+                
+                diet_data = {
+                    "meal_date": diet_entry.get("meal_date", "").strftime("%Y-%m-%d") if hasattr(diet_entry.get("meal_date", ""), "strftime") else diet_entry.get("meal_date", ""),
+                    "meal_type": diet_entry.get("meal_type", ""),
+                    "food_items": processed_food_items,
+                    "created_at": diet_entry.get("created_at", "").strftime("%Y-%m-%d %H:%M:%S") if hasattr(diet_entry.get("created_at", ""), "strftime") else diet_entry.get("created_at", "")
+                }
+                diet_history_data.append(diet_data)
+        else:
+            logger.info(f"[HEALTH_CHECK] 식단 이력 데이터 없음")
         
         # UserState에서 건강 지표 데이터 추출
         if hasattr(state, 'user_profile') and state.user_profile:
+            # 최신 건강 지표 데이터 추출
             if 'health_metrics' in state.user_profile and state.user_profile['health_metrics']:
                 # health_metrics 딕셔너리에서 각 항목 추출
                 metrics = state.user_profile['health_metrics']
@@ -60,6 +113,10 @@ async def analyze_health_metrics(state: UserState) -> HealthAssessment:
                             'systolic': metrics['blood_pressure_systolic'],
                             'diastolic': metrics['blood_pressure_diastolic']
                         }
+            
+            # 건강 지표 시계열 데이터 추출
+            if 'health_metrics_history' in state.user_profile and state.user_profile['health_metrics_history']:
+                health_metrics_history = state.user_profile['health_metrics_history']
         
         # 건강 지표가 없는 경우 로그
         if not health_metrics:
@@ -67,7 +124,7 @@ async def analyze_health_metrics(state: UserState) -> HealthAssessment:
             # 건강 지표가 없을 경우 바로 정보 부족 상태 반환
             assessment = HealthAssessment(
                 assessment_id=str(uuid4()),
-                user_id=state.user_id,
+                user_id=state.health_metrics['user_id'],
                 health_status="정보 부족",
                 concerns=["건강 지표 정보가 제공되지 않았습니다.", "현재 건강 상태를 평가할 수 있는 데이터가 없습니다."],
                 recommendations=["혈압, 혈당, 콜레스테롤 수치 등 기본적인 건강 지표를 측정해주세요.",
@@ -80,17 +137,28 @@ async def analyze_health_metrics(state: UserState) -> HealthAssessment:
             return assessment
         else:
             logger.info(f"분석할 건강 지표: {len(health_metrics)}개 항목 - {', '.join(health_metrics.keys())}")
+            if health_metrics_history:
+                logger.info(f"건강 지표 시계열 데이터: {', '.join(health_metrics_history.keys())}")
         
         # 건강 에이전트 초기화
         agent = get_health_agent()
         
         # 프롬프트 구성 - 응답 형식을 명확히 지정
         prompt = f"""
-        당신은 세계에서 가장 유명하고 친절한 의사 입니다. 다음 사용자의 건강 지표를 분석하고 진단 및 조언을 제공해주세요.:
+        당신은 세계에서 가장 유명하고 친절한 의사 입니다. 다음 사용자의 건강 지표를 분석하고 전문가답게 진단 및 조언을 제공해주세요. 만약 식단 개선이 필요할 경우 지금 사용중인 앱을 충실히 사용하라고 조언해 주세요. 아주 상세하게 설명해 주세요.:
         
-        사용자 ID: {state.user_id}
+        사용자 ID: {state.health_metrics['user_id']}
         질문: {state.query_text}
-        건강 지표: {json.dumps(health_metrics, ensure_ascii=False, indent=2)}
+        
+        최신 건강 지표: {json.dumps(health_metrics, ensure_ascii=False, indent=2)}
+        
+        건강 지표 시계열 데이터: {json.dumps(health_metrics_history, ensure_ascii=False, indent=2)}
+        
+        최근 운동 이력:
+        {json.dumps(exercise_history_data, ensure_ascii=False, indent=2)}
+        
+        최근 1달간 식단 이력:
+        {json.dumps(diet_history_data, ensure_ascii=False, indent=2)}
         
         매우 중요: 반드시 아래 JSON 형식으로만 응답해주세요. 다른 텍스트나 설명은 추가하지 마세요.
         
@@ -175,7 +243,7 @@ async def analyze_health_metrics(state: UserState) -> HealthAssessment:
         # HealthAssessment 객체 생성
         assessment = HealthAssessment(
             assessment_id=str(uuid4()),
-            user_id=state.user_id,
+            user_id=state.health_metrics['user_id'],
             health_status=assessment_data.get('health_status', '정보 부족'),
             concerns=assessment_data.get('concerns', []),
             recommendations=assessment_data.get('recommendations', []),

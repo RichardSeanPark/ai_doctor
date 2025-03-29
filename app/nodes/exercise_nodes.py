@@ -43,6 +43,45 @@ async def recommend_exercise_plan(state: Dict[str, Any]) -> Dict[str, Any]:
         logger.info(f"[EXERCISE_NODE] 사용자 건강 프로필 조회 시작 - 사용자 ID: {user_id}")
         user_health_profile = health_dao.get_complete_health_profile(user_id)
         
+        # 최근 1달간의 식단 데이터 조회
+        logger.info(f"[EXERCISE_NODE] 사용자 최근 식단 데이터 조회 시작 - 사용자 ID: {user_id}")
+        recent_diet_history = health_dao.get_recent_diet_advice_history(user_id, months=1)
+        diet_history_data = []
+        
+        if recent_diet_history:
+            logger.info(f"[EXERCISE_NODE] 최근 식단 데이터 {len(recent_diet_history)}개 조회 성공")
+            # 필요한 필드만 추출하여 정리
+            for diet_entry in recent_diet_history:
+                diet_data = {
+                    "meal_date": diet_entry.get("meal_date", "").strftime("%Y-%m-%d") if hasattr(diet_entry.get("meal_date", ""), "strftime") else diet_entry.get("meal_date", ""),
+                    "meal_type": diet_entry.get("meal_type", ""),
+                    "food_items": diet_entry.get("food_items", []),
+                    "created_at": diet_entry.get("created_at", "").strftime("%Y-%m-%d %H:%M:%S") if hasattr(diet_entry.get("created_at", ""), "strftime") else diet_entry.get("created_at", "")
+                }
+                diet_history_data.append(diet_data)
+        else:
+            logger.info(f"[EXERCISE_NODE] 최근 식단 데이터 없음")
+        
+        # 최근 운동 추천 데이터 조회
+        logger.info(f"[EXERCISE_NODE] 사용자 최근 운동 추천 데이터 조회 시작 - 사용자 ID: {user_id}")
+        recent_exercise_recommendations = health_dao.get_user_exercise_recommendations(user_id, limit=1)
+        exercise_history_data = []
+        
+        if recent_exercise_recommendations:
+            logger.info(f"[EXERCISE_NODE] 최근 운동 추천 데이터 {len(recent_exercise_recommendations)}개 조회 성공")
+            # 필요한 필드만 추출하여 정리
+            for recommendation in recent_exercise_recommendations:
+                lst_exercise_plans = []
+                for plan in recommendation.exercise_plans:
+                    exercise_name = plan.get("name", "")
+                    lst_exercise_plans.append(exercise_name)
+                exercise_data = {
+                    "exercise_plans": lst_exercise_plans
+                }
+                exercise_history_data.append(exercise_data)
+        else:
+            logger.info(f"[EXERCISE_NODE] 최근 운동 추천 데이터 없음")
+        
         # 사용자 정보 병합
         user_profile = state.get("user_profile", {}) if isinstance(state, dict) else {}
         
@@ -68,6 +107,14 @@ async def recommend_exercise_plan(state: Dict[str, Any]) -> Dict[str, Any]:
                 
                 # 기타 건강 정보 추가
                 user_profile['health_metrics'] = health_metrics
+            
+            # 건강 지표 시계열 데이터 추출
+            health_metrics_history = {}
+            if 'health_metrics_history' in user_health_profile:
+                health_metrics_history = user_health_profile['health_metrics_history']
+                logger.info(f"[EXERCISE_NODE] 건강 지표 시계열 데이터 추출: {', '.join(health_metrics_history.keys())}")
+                # 시계열 데이터를 사용자 프로필에 추가
+                user_profile['health_metrics_history'] = health_metrics_history
             
             # 기본 정보 통합 (성별)
             if 'gender' in user_health_profile and user_health_profile['gender']:
@@ -113,7 +160,7 @@ async def recommend_exercise_plan(state: Dict[str, Any]) -> Dict[str, Any]:
         conditions_str = "없음" if not health_conditions else ", ".join(health_conditions)
         
         # Gemini 에이전트 초기화
-        agent = get_gemini_agent(temperature=0.3)
+        agent = get_gemini_agent(temperature=0.7)
         
         logger.info(f"[EXERCISE_NODE] 운동 전문가 AI 호출 준비")
         
@@ -133,6 +180,15 @@ async def recommend_exercise_plan(state: Dict[str, Any]) -> Dict[str, Any]:
         - 키: {height}
         - 체중: {weight}
         - 건강 상태: {conditions_str}
+        
+        ### 건강 지표 시계열 데이터:
+        {json.dumps(health_metrics_history, ensure_ascii=False, indent=2)}
+        
+        ### 최근 1달간 식단 정보:
+        {json.dumps(diet_history_data, ensure_ascii=False, indent=2)}
+        
+        ### 최근 운동 추천 기록:
+        {json.dumps(exercise_history_data, ensure_ascii=False, indent=2)}
         
         ### 운동 환경 및 선호도:
         - 운동 장소: {exercise_location}
@@ -170,6 +226,8 @@ async def recommend_exercise_plan(state: Dict[str, Any]) -> Dict[str, Any]:
         3. 사용자의 운동 경험 수준에 맞는 난이도로 운동을 구성하세요.
         4. 건강 상태나 제약사항을 고려하여 안전한 운동을 권장하세요.
         5. 선호하는 운동 유형과 강도를 반영한 계획을 제시하세요.
+        6. 총 모든 운동을 완료하는데 걸리는 시간이 1시간 이하로 구성하세요.
+        7. 최근 조언한 운동 계획을 참고하여 운동 계획을 구성하세요. 가급적 가장 최근에 추천한 운동은 추천하지 마세요.
         """
         
         logger.info(f"[EXERCISE_NODE] Gemini API 호출 시작")
