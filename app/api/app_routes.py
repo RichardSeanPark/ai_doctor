@@ -4,8 +4,7 @@ from typing import Optional
 
 from app.models.app_data import AppVersionInfo
 from app.db.app_dao import AppDAO
-from app.models.response_models import ApiResponse
-from app.api.deps import get_current_user
+from app.models.api_models import ApiResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

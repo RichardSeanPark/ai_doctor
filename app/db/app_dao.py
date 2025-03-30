@@ -1,5 +1,5 @@
 import logging
-from app.db.database import get_db_connection
+from app.db.database import Database
 
 logger = logging.getLogger(__name__)
 
@@ -7,7 +7,7 @@ class AppDAO:
     """안드로이드 앱 버전 관리를 위한 DAO 클래스"""
     
     def __init__(self):
-        self.db = get_db_connection()
+        self.db = Database()
     
     def get_latest_version(self):
         """
@@ -30,14 +30,7 @@ class AppDAO:
             result = self.db.fetch_one(query)
             
             if result:
-                return {
-                    "version_code": result[0],
-                    "version_name": result[1],
-                    "min_api_level": result[2],
-                    "force_update": bool(result[3]),
-                    "change_log": result[4],
-                    "created_at": result[5]
-                }
+                return result
             return None
         except Exception as e:
             logger.error(f"최신 앱 버전 조회 오류: {str(e)}")

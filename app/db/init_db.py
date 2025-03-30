@@ -117,38 +117,16 @@ def init_database():
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     """
     
-    # 운동 스케줄 테이블 생성
-    create_exercise_schedules_table = """
-    CREATE TABLE IF NOT EXISTS exercise_schedules (
-        schedule_id VARCHAR(36) PRIMARY KEY,
-        recommendation_id VARCHAR(36) NOT NULL,
-        user_id VARCHAR(36) NOT NULL,
-        day_of_week TINYINT NOT NULL COMMENT '0=일요일, 1=월요일, ..., 6=토요일',
-        time_of_day TIME NOT NULL,
-        duration_minutes INT DEFAULT 30,
-        notification_enabled BOOLEAN DEFAULT TRUE,
-        notification_minutes_before INT DEFAULT 30,
-        is_active BOOLEAN DEFAULT TRUE,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        FOREIGN KEY (recommendation_id) REFERENCES exercise_recommendations(recommendation_id) ON DELETE CASCADE,
-        FOREIGN KEY (user_id) REFERENCES social_accounts(user_id) ON DELETE CASCADE,
-        UNIQUE KEY uk_user_schedule (user_id, day_of_week, time_of_day)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-    """
-    
     # 운동 완료 기록 테이블 생성
     create_exercise_completions_table = """
     CREATE TABLE IF NOT EXISTS exercise_completions (
         completion_id VARCHAR(36) PRIMARY KEY,
-        schedule_id VARCHAR(36) NOT NULL,
         recommendation_id VARCHAR(36) NOT NULL,
         user_id VARCHAR(36) NOT NULL,
         completed_at TIMESTAMP NOT NULL,
         satisfaction_rating TINYINT NULL COMMENT '1-5 평점',
         feedback TEXT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (schedule_id) REFERENCES exercise_schedules(schedule_id) ON DELETE CASCADE,
         FOREIGN KEY (recommendation_id) REFERENCES exercise_recommendations(recommendation_id) ON DELETE CASCADE,
         FOREIGN KEY (user_id) REFERENCES social_accounts(user_id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -186,9 +164,6 @@ def init_database():
         
         db.execute_query(create_exercise_recommendations_table)
         logger.info("exercise_recommendations 테이블 생성 완료")
-        
-        db.execute_query(create_exercise_schedules_table)
-        logger.info("exercise_schedules 테이블 생성 완료")
         
         db.execute_query(create_exercise_completions_table)
         logger.info("exercise_completions 테이블 생성 완료")

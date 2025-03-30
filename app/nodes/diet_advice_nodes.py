@@ -11,9 +11,25 @@ from langgraph.graph import END
 from app.models.notification import UserState
 from app.models.diet_plan import DietSpecialistResponse, FoodItem
 from app.agents.agent_config import get_diet_agent, get_diet_specialist_agent
+from app.db.health_dao import HealthDAO
 
 # 로거 설정
 logger = logging.getLogger(__name__)
+
+def calculate_age_from_birth_date(birth_date):
+    """사용자의 생년월일로부터 나이를 계산합니다."""
+    if not birth_date:
+        return "정보 없음"
+    
+    try:
+        if isinstance(birth_date, str):
+            birth_date = datetime.fromisoformat(birth_date.replace('Z', '+00:00'))
+        
+        age = datetime.now().year - birth_date.year
+        return str(age)
+    except Exception as e:
+        logger.error(f"나이 계산 오류: {str(e)}")
+        return "정보 없음"
 
 async def route_diet_request(state: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -556,7 +572,7 @@ async def provide_diet_advice(state: Dict[str, Any]) -> Dict[str, Any]:
             logger.warning("[DIET_ADVICE] birth_date 정보가 없어 나이를 계산할 수 없습니다.")
         
         # 식이 조언 생성 로직
-        diet_agent = get_diet_advice_agent()
+        diet_agent = get_diet_agent()
         
         # 사용자 정보 프롬프트 구성
         gender = user_profile.get('gender', '알 수 없음')

@@ -5,7 +5,7 @@ from typing import Dict, List, Any, Optional, Union
 import json
 
 from app.db.database import Database
-from app.models.exercise_data import ExerciseRecommendation, ExerciseSchedule, ExerciseCompletion
+from app.models.exercise_data import ExerciseRecommendation, ExerciseCompletion
 
 logger = logging.getLogger(__name__)
 
@@ -842,171 +842,6 @@ class HealthDAO:
             logger.error(f"운동 시간 예약 중 오류 발생: {str(e)}")
             return False
     
-    def save_exercise_schedule(self, schedule: ExerciseSchedule) -> bool:
-        """
-        운동 스케줄을 저장합니다.
-        
-        Args:
-            schedule: 저장할 운동 스케줄 객체
-            
-        Returns:
-            bool: 저장 성공 여부
-        """
-        try:
-            # 이미 동일한 요일, 시간에 스케줄이 있는지 확인
-            check_query = """
-            SELECT schedule_id FROM exercise_schedules
-            WHERE user_id = %s AND day_of_week = %s AND time_of_day = %s AND is_active = TRUE
-            """
-            existing_record = self.db.fetch_one(check_query, (
-                schedule.user_id, 
-                schedule.day_of_week, 
-                schedule.time_of_day.strftime('%H:%M:%S')
-            ))
-            
-            if existing_record:
-                # 기존 레코드가 있으면 업데이트
-                logger.info(f"동일한 요일과 시간에 기존 스케줄을 발견하여 업데이트합니다. 기존 ID: {existing_record['schedule_id']}")
-                
-                update_query = """
-                UPDATE exercise_schedules
-                SET 
-                    recommendation_id = %s,
-                    duration_minutes = %s,
-                    notification_enabled = %s,
-                    notification_minutes_before = %s,
-                    is_active = %s,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE schedule_id = %s
-                """
-                
-                self.db.execute_query(update_query, (
-                    schedule.recommendation_id,
-                    schedule.duration_minutes,
-                    schedule.notification_enabled,
-                    schedule.notification_minutes_before,
-                    schedule.is_active,
-                    existing_record['schedule_id']
-                ))
-                
-                logger.info(f"운동 스케줄 업데이트 성공: ID {existing_record['schedule_id']}")
-                
-                # schedule 객체의 ID를 기존 ID로 업데이트 (일관성 유지)
-                schedule.schedule_id = existing_record['schedule_id']
-                
-                return True
-            else:
-                # 새 레코드 삽입
-                insert_query = """
-                INSERT INTO exercise_schedules (
-                    schedule_id, recommendation_id, user_id, day_of_week, time_of_day,
-                    duration_minutes, notification_enabled, notification_minutes_before,
-                    is_active, created_at, updated_at
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                """
-                
-                self.db.execute_query(insert_query, (
-                    schedule.schedule_id,
-                    schedule.recommendation_id,
-                    schedule.user_id,
-                    schedule.day_of_week,
-                    schedule.time_of_day.strftime('%H:%M:%S'),
-                    schedule.duration_minutes,
-                    schedule.notification_enabled,
-                    schedule.notification_minutes_before,
-                    schedule.is_active
-                ))
-                
-                logger.info(f"새 운동 스케줄 저장 성공: ID {schedule.schedule_id}")
-                
-                return True
-                
-        except Exception as e:
-            logger.error(f"운동 스케줄 저장 중 오류 발생: {str(e)}")
-            return False
-    
-    def get_exercise_schedules_by_recommendation(self, recommendation_id: str) -> List[ExerciseSchedule]:
-        """
-        특정 운동 추천의 스케줄 목록을 조회합니다.
-        
-        Args:
-            recommendation_id: 조회할 운동 추천 ID
-            
-        Returns:
-            List[ExerciseSchedule]: 운동 스케줄 목록
-        """
-        try:
-            query = """
-            SELECT * FROM exercise_schedules
-            WHERE recommendation_id = %s AND is_active = TRUE
-            ORDER BY day_of_week, time_of_day
-            """
-            results = self.db.fetch_all(query, (recommendation_id,))
-            
-            schedules = []
-            for result in results:
-                schedule = ExerciseSchedule(
-                    schedule_id=result['schedule_id'],
-                    recommendation_id=result['recommendation_id'],
-                    user_id=result['user_id'],
-                    day_of_week=result['day_of_week'],
-                    time_of_day=datetime.strptime(str(result['time_of_day']), '%H:%M:%S').time(),
-                    duration_minutes=result['duration_minutes'],
-                    notification_enabled=result['notification_enabled'],
-                    notification_minutes_before=result['notification_minutes_before'],
-                    is_active=result['is_active'],
-                    created_at=result['created_at'],
-                    updated_at=result['updated_at']
-                )
-                schedules.append(schedule)
-            
-            return schedules
-            
-        except Exception as e:
-            logger.error(f"운동 스케줄 목록 조회 중 오류 발생: {str(e)}")
-            return []
-    
-    def get_user_exercise_schedules(self, user_id: str) -> List[ExerciseSchedule]:
-        """
-        사용자의 모든 운동 스케줄을 조회합니다.
-        
-        Args:
-            user_id: 사용자 ID
-            
-        Returns:
-            List[ExerciseSchedule]: 운동 스케줄 목록
-        """
-        try:
-            query = """
-            SELECT * FROM exercise_schedules
-            WHERE user_id = %s AND is_active = TRUE
-            ORDER BY day_of_week, time_of_day
-            """
-            results = self.db.fetch_all(query, (user_id,))
-            
-            schedules = []
-            for result in results:
-                schedule = ExerciseSchedule(
-                    schedule_id=result['schedule_id'],
-                    recommendation_id=result['recommendation_id'],
-                    user_id=result['user_id'],
-                    day_of_week=result['day_of_week'],
-                    time_of_day=datetime.strptime(str(result['time_of_day']), '%H:%M:%S').time(),
-                    duration_minutes=result['duration_minutes'],
-                    notification_enabled=result['notification_enabled'],
-                    notification_minutes_before=result['notification_minutes_before'],
-                    is_active=result['is_active'],
-                    created_at=result['created_at'],
-                    updated_at=result['updated_at']
-                )
-                schedules.append(schedule)
-            
-            return schedules
-            
-        except Exception as e:
-            logger.error(f"사용자 운동 스케줄 목록 조회 중 오류 발생: {str(e)}")
-            return []
-    
     def get_recent_diet_advice_history(self, user_id: str, months: int = 1) -> List[Dict[str, Any]]:
         """
         사용자의 최근 식단 조언 기록을 조회합니다.
@@ -1067,14 +902,13 @@ class HealthDAO:
         try:
             insert_query = """
             INSERT INTO exercise_completions (
-                completion_id, schedule_id, recommendation_id, user_id,
+                completion_id, recommendation_id, user_id,
                 completed_at, satisfaction_rating, feedback, created_at
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+            ) VALUES (%s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
             """
             
             self.db.execute_query(insert_query, (
                 completion.completion_id,
-                completion.schedule_id,
                 completion.recommendation_id,
                 completion.user_id,
                 completion.completed_at,
@@ -1089,46 +923,6 @@ class HealthDAO:
         except Exception as e:
             logger.error(f"운동 완료 기록 저장 중 오류 발생: {str(e)}")
             return False
-    
-    def get_exercise_completions_by_schedule(self, schedule_id: str, limit: int = 10) -> List[ExerciseCompletion]:
-        """
-        특정 스케줄의 완료 기록을 조회합니다.
-        
-        Args:
-            schedule_id: 조회할 스케줄 ID
-            limit: 최대 반환 결과 수
-            
-        Returns:
-            List[ExerciseCompletion]: 운동 완료 기록 목록
-        """
-        try:
-            query = """
-            SELECT * FROM exercise_completions
-            WHERE schedule_id = %s
-            ORDER BY completed_at DESC
-            LIMIT %s
-            """
-            results = self.db.fetch_all(query, (schedule_id, limit))
-            
-            completions = []
-            for result in results:
-                completion = ExerciseCompletion(
-                    completion_id=result['completion_id'],
-                    schedule_id=result['schedule_id'],
-                    recommendation_id=result['recommendation_id'],
-                    user_id=result['user_id'],
-                    completed_at=result['completed_at'],
-                    satisfaction_rating=result['satisfaction_rating'],
-                    feedback=result['feedback'],
-                    created_at=result['created_at']
-                )
-                completions.append(completion)
-            
-            return completions
-            
-        except Exception as e:
-            logger.error(f"운동 완료 기록 조회 중 오류 발생: {str(e)}")
-            return []
     
     def check_exercise_completion(self, recommendation_id: str) -> bool:
         """
@@ -1155,62 +949,4 @@ class HealthDAO:
             
         except Exception as e:
             logger.error(f"운동 완료 여부 확인 중 오류 발생: {str(e)}")
-            return False
-    
-    def get_today_schedules_for_notification(self, minutes_threshold: int = 30) -> List[Dict[str, Any]]:
-        """
-        오늘 알림이 필요한 운동 스케줄을 조회합니다.
-        
-        Args:
-            minutes_threshold: 현재 시간으로부터 몇 분 후의 스케줄을 가져올지 설정
-            
-        Returns:
-            List[Dict]: 알림이 필요한 스케줄 정보 목록 (사용자 정보 포함)
-        """
-        try:
-            # 현재 요일 및 시간 계산
-            now = datetime.now()
-            day_of_week = now.weekday()  # 월요일=0, 일요일=6
-            if day_of_week == 6:  # 일요일이면 0으로 변환
-                day_of_week = 0
-            else:  # 그 외에는 월요일이 1, 화요일이 2, ... 토요일이 6이 되도록 +1
-                day_of_week += 1
-            
-            # 현재 시간 + minutes_threshold 분 후의 시간 계산
-            notification_time = (now + timedelta(minutes=minutes_threshold)).time()
-            
-            query = """
-            SELECT es.*, sa.social_id, sa.provider, sa.gender, er.goal, er.recommendation_summary
-            FROM exercise_schedules es
-            JOIN social_accounts sa ON es.user_id = sa.user_id
-            JOIN exercise_recommendations er ON es.recommendation_id = er.recommendation_id
-            WHERE es.day_of_week = %s
-            AND es.time_of_day BETWEEN %s AND DATE_ADD(%s, INTERVAL 5 MINUTE)
-            AND es.is_active = TRUE
-            AND es.notification_enabled = TRUE
-            """
-            
-            time_str = notification_time.strftime('%H:%M:%S')
-            results = self.db.fetch_all(query, (day_of_week, time_str, time_str))
-            
-            notification_schedules = []
-            for result in results:
-                notification_schedules.append({
-                    'schedule_id': result['schedule_id'],
-                    'recommendation_id': result['recommendation_id'],
-                    'user_id': result['user_id'],
-                    'social_id': result['social_id'],
-                    'provider': result['provider'],
-                    'gender': result['gender'],
-                    'day_of_week': result['day_of_week'],
-                    'time_of_day': str(result['time_of_day']),
-                    'duration_minutes': result['duration_minutes'],
-                    'goal': result['goal'],
-                    'recommendation_summary': result['recommendation_summary']
-                })
-            
-            return notification_schedules
-            
-        except Exception as e:
-            logger.error(f"알림이 필요한 스케줄 조회 중 오류 발생: {str(e)}")
-            return [] 
+            return False 

@@ -24,26 +24,11 @@ class ExerciseRecommendation(BaseModel):
     exercise_constraints: Optional[List[str]] = []  # 운동 제약사항
     # 하위 호환성을 위한 추가 속성
     completed: bool = False  # 운동 완료 여부 (실제로는 운동 완료 테이블에서 관리)
-    scheduled_time: Optional[datetime] = None  # 예약 시간 (실제로는 운동 스케줄 테이블에서 관리)
-
-class ExerciseSchedule(BaseModel):
-    """운동 스케줄 모델"""
-    schedule_id: str = str(uuid4())
-    recommendation_id: str
-    user_id: str
-    day_of_week: int  # 0=일요일, 1=월요일, ..., 6=토요일
-    time_of_day: time
-    duration_minutes: int = 30
-    notification_enabled: bool = True
-    notification_minutes_before: int = 30
-    is_active: bool = True
-    created_at: datetime = Field(default_factory=datetime.now)
-    updated_at: datetime = Field(default_factory=datetime.now)
+    scheduled_time: Optional[datetime] = None  # 예약 시간 (스케줄 기능 제거됨)
 
 class ExerciseCompletion(BaseModel):
     """운동 완료 기록 모델"""
     completion_id: str = str(uuid4())
-    schedule_id: str
     recommendation_id: str
     user_id: str
     completed_at: datetime = Field(default_factory=datetime.now)
