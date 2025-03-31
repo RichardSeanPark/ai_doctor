@@ -38,7 +38,7 @@ async def get_user_profile(current_user=Depends(get_current_user)):
         user = user_dao.get_user_by_id(current_user["user_id"])
         if not user:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
+                status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="사용자를 찾을 수 없습니다."
             )
         

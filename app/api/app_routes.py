@@ -1,5 +1,5 @@
 import logging
-from fastapi import APIRouter, Depends, HTTPException, status, Body
+from fastapi import APIRouter, Depends, HTTPException, status, Body, Response
 from typing import Optional
 
 from app.models.app_data import AppVersionInfo
@@ -11,11 +11,15 @@ router = APIRouter()
 app_dao = AppDAO()
 
 @router.get("/version", response_model=ApiResponse)
-async def get_app_version():
+async def get_app_version(response: Response):
     """
     최신 앱 버전 정보를 조회합니다.
     클라이언트는 이 정보를 통해 업데이트 필요성을 판단할 수 있습니다.
     """
+    response.headers["Cache-Control"] = "no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    
     try:
         version_info = app_dao.get_latest_version()
         

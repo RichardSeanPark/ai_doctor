@@ -4,6 +4,7 @@ API 유틸리티 함수들을 제공하는 모듈
 
 import logging
 from typing import Dict, Any, Optional, Callable, TypeVar
+from fastapi import HTTPException
 from app.models.api_models import ApiResponse
 
 logger = logging.getLogger(__name__)
@@ -23,6 +24,9 @@ async def handle_api_error(func: Callable[..., T], log_prefix: str, success_mess
         
     Returns:
         ApiResponse: 표준화된 API 응답
+        
+    Raises:
+        HTTPException: FastAPI HTTP 예외는 그대로 전파되어 적절한 상태 코드 응답이 됩니다.
     """
     try:
         result = await func(*args, **kwargs)
@@ -32,6 +36,10 @@ async def handle_api_error(func: Callable[..., T], log_prefix: str, success_mess
             message=success_message,
             data=result
         )
+    except HTTPException:
+        # HTTP 예외는 그대로 전파하여 적절한 상태 코드가 반환되도록 함
+        logger.error(f"{log_prefix} 중 HTTP 예외 발생")
+        raise
     except Exception as e:
         error_msg = f"{log_prefix} 중 오류: {str(e)}"
         logger.error(error_msg)

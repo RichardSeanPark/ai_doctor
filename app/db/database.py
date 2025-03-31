@@ -91,9 +91,12 @@ class Database:
         try:
             with conn.cursor() as cursor:
                 cursor.execute(query, params)
-                return cursor.fetchone()
+                result = cursor.fetchone()
+                self.close()
+                return result
         except pymysql.Error as e:
             logger.error(f"쿼리 실행 오류: {e}, 쿼리: {query}, 파라미터: {params}")
+            self.close()
             raise
     
     def fetch_all(self, query: str, params: tuple = None) -> List[Dict]:
@@ -108,9 +111,11 @@ class Database:
                 cursor.execute(query, params)
                 results = cursor.fetchall()
                 logger.info(f"[DB] 조회 결과 - 레코드 수: {len(results)}")
+                self.close()
                 return results
         except pymysql.Error as e:
             logger.error(f"쿼리 실행 오류: {e}, 쿼리: {query}, 파라미터: {params}")
+            self.close()
             raise
     
     def insert_and_get_id(self, query: str, params: tuple = None) -> int:
