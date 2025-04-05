@@ -231,4 +231,42 @@ async def update_user_profile(birth_date: Optional[str] = None, gender: Optional
         _update_user_profile,
         "사용자 프로필 업데이트",
         "사용자 프로필이 성공적으로 업데이트되었습니다."
+    )
+
+# 계정 삭제 엔드포인트
+@router.delete("/account", response_model=ApiResponse)
+async def delete_account(current_user=Depends(get_current_user)):
+    """
+    현재 로그인한 사용자의 계정을 삭제합니다.
+    모든 관련 데이터(세션, 건강 지표, 식단 기록 등)가 함께 삭제됩니다.
+    """
+    async def _delete_account():
+        user_id = current_user["user_id"]
+        
+        # 사용자 존재 여부 확인
+        user = user_dao.get_user_by_id(user_id)
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="사용자를 찾을 수 없습니다."
+            )
+        
+        # 사용자 계정 삭제 (관련된 모든 데이터는 CASCADE로 삭제됨)
+        success = user_dao.delete_user(user_id)
+        
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="계정 삭제 중 오류가 발생했습니다."
+            )
+        
+        return {
+            "user_id": user_id,
+            "deleted": True
+        }
+    
+    return await handle_api_error(
+        _delete_account,
+        "계정 삭제",
+        "계정이 성공적으로 삭제되었습니다."
     ) 

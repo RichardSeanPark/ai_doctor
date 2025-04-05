@@ -185,4 +185,40 @@ class UserDAO:
             return metrics_id
         except Exception as e:
             logger.error(f"건강 지표 업데이트 오류: {e}")
-            return None 
+            return None
+    
+    def delete_user(self, user_id: str) -> bool:
+        """
+        사용자 계정 삭제
+        
+        데이터베이스에 ON DELETE CASCADE 제약 조건이 설정되어 있으므로 
+        social_accounts 테이블에서 사용자를 삭제하면 관련된 모든 데이터가 함께 삭제됩니다.
+        다음 테이블의 사용자 관련 데이터가 모두 삭제됩니다:
+        - sessions: 사용자 세션 정보
+        - health_metrics: 키, 몸무게 등 건강 지표
+        - dietary_restrictions: 식이 제한 정보
+        - diet_advice_history: 식단 조언 기록
+        - exercise_recommendations: 운동 추천 정보
+        - exercise_completions: 운동 완료 기록
+        
+        Parameters:
+            user_id (str): 삭제할 사용자의 ID
+            
+        Returns:
+            bool: 삭제 성공 여부
+        """
+        try:
+            # 사용자 계정 삭제 쿼리
+            query = "DELETE FROM social_accounts WHERE user_id = %s"
+            rows = self.db.execute_query(query, (user_id,))
+            
+            success = rows > 0
+            if success:
+                logger.info(f"사용자 계정 및 모든 관련 데이터 삭제 성공: {user_id}")
+            else:
+                logger.warning(f"사용자 계정 삭제 실패 (사용자를 찾을 수 없음): {user_id}")
+            
+            return success
+        except Exception as e:
+            logger.error(f"사용자 계정 삭제 오류: {e}")
+            return False 
