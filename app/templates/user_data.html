@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Health AI - 개인정보 관리</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/css/styles.css') }}">
+    <meta name="description" content="Health AI 앱 사용자의 개인정보 관리 페이지입니다.">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Health AI</h1>
+            <h2>개인정보 관리</h2>
+        </header>
+
+        <!-- 로그인 섹션 -->
+        <section id="login-section" class="section">
+            <h3>로그인</h3>
+            <p>계속하려면 Health AI 앱 계정으로 로그인하세요.</p>
+            
+            <div class="login-options">
+                <button id="kakao-login" class="login-btn kakao">
+                    <img src="{{ url_for('static', path='/img/kakao-icon.png') }}" alt="Kakao" width="24" height="24">
+                    카카오로 로그인
+                </button>
+                <button id="google-login" class="login-btn google">
+                    <img src="{{ url_for('static', path='/img/google-icon.png') }}" alt="Google" width="24" height="24">
+                    구글로 로그인
+                </button>
+            </div>
+        </section>
+
+        <!-- 사용자 데이터 섹션 (로그인 후 표시) -->
+        <section id="user-data-section" class="section hidden">
+            <div class="user-profile">
+                <div class="profile-info">
+                    <h3>사용자 프로필</h3>
+                    <div class="info-item">
+                        <span class="label">사용자 ID:</span>
+                        <span id="user-id" class="value"></span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">로그인 방식:</span>
+                        <span id="user-provider" class="value"></span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">가입일:</span>
+                        <span id="user-created-at" class="value"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 개인 정보 섹션 -->
+            <div class="data-section">
+                <h3>개인 정보</h3>
+                <form id="profile-form">
+                    <div class="form-group">
+                        <label for="birth-date">생년월일:</label>
+                        <input type="date" id="birth-date" name="birth_date">
+                    </div>
+                    <div class="form-group">
+                        <label for="gender">성별:</label>
+                        <select id="gender" name="gender">
+                            <option value="">선택하세요</option>
+                            <option value="male">남성</option>
+                            <option value="female">여성</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn primary">개인 정보 업데이트</button>
+                </form>
+            </div>
+
+            <!-- 건강 정보 섹션 -->
+            <div class="data-section">
+                <h3>건강 정보</h3>
+                <div class="health-info">
+                    <div class="info-item">
+                        <span class="label">키:</span>
+                        <span id="user-height" class="value">-</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">몸무게:</span>
+                        <span id="user-weight" class="value">-</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">BMI:</span>
+                        <span id="user-bmi" class="value">-</span>
+                    </div>
+                </div>
+                
+                <form id="health-form">
+                    <div class="form-group">
+                        <label for="height">키 (cm):</label>
+                        <input type="number" id="height" name="height" min="100" max="250" step="0.1">
+                    </div>
+                    <div class="form-group">
+                        <label for="weight">몸무게 (kg):</label>
+                        <input type="number" id="weight" name="weight" min="30" max="200" step="0.1">
+                    </div>
+                    <button type="submit" class="btn primary">건강 정보 업데이트</button>
+                </form>
+            </div>
+
+            <!-- 데이터 내보내기 섹션 -->
+            <div class="data-section">
+                <h3>데이터 내보내기</h3>
+                <p>앱에 저장된 모든 데이터를 JSON 형식으로 내보낼 수 있습니다.</p>
+                <button id="export-data" class="btn secondary">데이터 내보내기</button>
+            </div>
+
+            <!-- 위험 구역 -->
+            <div class="data-section danger-zone">
+                <h3>계정 삭제</h3>
+                <p>계정 삭제 시 모든 개인 데이터가 영구적으로 제거됩니다. 이 작업은 되돌릴 수 없습니다.</p>
+                <button id="delete-account" class="btn danger">계정 삭제</button>
+            </div>
+        </section>
+
+        <!-- 계정 삭제 확인 모달 -->
+        <div id="delete-modal" class="modal hidden">
+            <div class="modal-content">
+                <h3>계정 삭제 확인</h3>
+                <p>정말로 계정을 삭제하시겠습니까? 모든 데이터가 영구적으로 삭제됩니다.</p>
+                <div class="modal-buttons">
+                    <button id="confirm-delete" class="btn danger">삭제</button>
+                    <button id="cancel-delete" class="btn secondary">취소</button>
+                </div>
+            </div>
+        </div>
+
+        <footer>
+            <p>&copy; 2023 Health AI. All rights reserved.</p>
+        </footer>
+    </div>
+
+    <script src="{{ url_for('static', path='/js/user-data.js') }}"></script>
+</body>
+</html> 

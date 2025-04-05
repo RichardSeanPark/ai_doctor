@@ -12,7 +12,9 @@ from typing import Dict, Any, Optional, List, Union
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Depends, Request, Body, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 
 # 앱 모듈 임포트
@@ -41,6 +43,12 @@ logger = logging.getLogger(__name__)
 
 # FastAPI 앱 인스턴스 생성
 app = FastAPI(title="Health AI API", description="안드로이드 앱과 통신하는 건강 관리 AI API")
+
+# 정적 파일 마운트
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
+
+# Jinja2 템플릿 설정
+templates = Jinja2Templates(directory="app/templates")
 
 # CORS 설정 (안드로이드 앱에서의 요청 허용)
 app.add_middleware(
@@ -119,6 +127,113 @@ def get_user_session(user_id: str, create_if_missing: bool = True) -> Dict[str, 
 async def root():
     """API 서버 상태 확인"""
     return {"status": "Health AI API server is running"}
+
+@app.get("/user-data", response_class=HTMLResponse)
+async def user_data_page(request: Request):
+    """사용자 데이터 관리 웹페이지"""
+    return templates.TemplateResponse("user_data.html", {"request": request})
+
+@app.get("/privacy-policy", response_class=HTMLResponse)
+async def privacy_policy_page(request: Request):
+    """개인정보 처리방침 페이지 - Google Play 스토어용"""
+    return templates.TemplateResponse("privacy_policy.html", {"request": request})
+
+@app.get("/privacy", response_class=HTMLResponse)
+async def privacy_policy_simple_page(request: Request):
+    """간소화된 개인정보 처리방침 페이지 - Google Play 스토어 등록정보용"""
+    return templates.TemplateResponse("privacy_policy_simple.html", {"request": request})
+
+@app.post("/api/v1/web/auth/verify-token", response_model=ApiResponse)
+async def verify_token(token_data: Dict[str, Any] = Body(...)):
+    """웹 클라이언트를 위한 토큰 검증"""
+    from app.auth.auth_handler import decode_jwt
+    
+    try:
+        token = token_data.get("token")
+        if not token:
+            return ApiResponse(
+                success=False,
+                message="토큰이 제공되지 않았습니다",
+                data=None
+            )
+        
+        # JWT 토큰 검증
+        payload = decode_jwt(token)
+        if not payload:
+            return ApiResponse(
+                success=False,
+                message="유효하지 않은 토큰입니다",
+                data=None
+            )
+        
+        user_id = payload.get("user_id")
+        
+        # 사용자 정보 반환
+        return ApiResponse(
+            success=True,
+            message="토큰이 검증되었습니다",
+            data={"user_id": user_id}
+        )
+    except Exception as e:
+        logger.error(f"토큰 검증 오류: {str(e)}")
+        return ApiResponse(
+            success=False,
+            message=f"토큰 검증 중 오류가 발생했습니다: {str(e)}",
+            data={"error": str(e)}
+        )
+
+@app.post("/api/v1/web/user/data", response_model=ApiResponse)
+async def get_user_data(request_data: Dict[str, Any] = Body(...)):
+    """사용자 데이터 조회 (웹 클라이언트용)"""
+    from app.dao.user_dao import UserDAO
+    from app.dao.health_metrics_dao import HealthMetricsDAO
+    
+    try:
+        user_id = request_data.get("user_id")
+        if not user_id:
+            return ApiResponse(
+                success=False,
+                message="사용자 ID가 제공되지 않았습니다",
+                data=None
+            )
+        
+        # 사용자 정보 조회
+        user_dao = UserDAO()
+        health_metrics_dao = HealthMetricsDAO()
+        
+        user = user_dao.get_user_by_id(user_id)
+        if not user:
+            return ApiResponse(
+                success=False,
+                message="사용자를 찾을 수 없습니다",
+                data=None
+            )
+        
+        # 최신 건강 정보 조회
+        latest_metrics = health_metrics_dao.get_latest_metrics(user_id)
+        
+        # 응답 데이터 구성
+        user_data = {
+            "user_id": user_id,
+            "provider": user.get("provider", "unknown"),
+            "created_at": user.get("created_at"),
+            "birth_date": user.get("birth_date"),
+            "gender": user.get("gender"),
+            "health_metrics": latest_metrics
+        }
+        
+        return ApiResponse(
+            success=True,
+            message="사용자 데이터 조회가 완료되었습니다",
+            data=user_data
+        )
+    except Exception as e:
+        logger.error(f"사용자 데이터 조회 오류: {str(e)}")
+        return ApiResponse(
+            success=False,
+            message=f"사용자 데이터 조회 중 오류가 발생했습니다: {str(e)}",
+            data={"error": str(e)}
+        )
 
 @app.post("/api/v1/user/profile", response_model=ApiResponse)
 async def create_or_update_user_profile(profile_data: Dict[str, Any] = Body(...)):
